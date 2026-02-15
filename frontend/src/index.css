@@ -1,0 +1,64 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Instrument+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: 210 40% 98%;
+  --foreground: 222.2 84% 4.9%;
+  --accent: 217 91% 60%;
+  --accent-strong: 221 83% 53%;
+  --surface: 0 0% 100%;
+  --muted: 215 16% 92%;
+}
+
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+}
+
+html, body, #root {
+  height: 100%;
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Instrument Sans', system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.01em;
+  overflow-x: hidden;
+  background-image:
+    radial-gradient(1200px 600px at 10% -10%, rgba(59, 130, 246, 0.18), transparent 60%),
+    radial-gradient(1000px 500px at 95% 5%, rgba(14, 165, 233, 0.16), transparent 55%),
+    radial-gradient(900px 500px at 20% 80%, rgba(16, 185, 129, 0.12), transparent 60%);
+}
+
+h1, h2, h3, h4 {
+  font-family: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  letter-spacing: -0.02em;
+}
+
+* {
+  transition: background-color 200ms ease, border-color 200ms ease, color 200ms ease, box-shadow 200ms ease, transform 200ms ease;
+}
+
+::selection {
+  background: rgba(59, 130, 246, 0.25);
+}
+
+/* Responsive base font sizes */
+@media (max-width: 639px) {
+  body { font-size: 14px; }
+}
+@media (min-width: 1024px) {
+  body { font-size: 16px; }
+}
+
+/* Touch target utility for 44x44 minimum */
+.touch-target {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+

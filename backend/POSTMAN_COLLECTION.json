@@ -1,0 +1,282 @@
+{
+  "info": {
+    "name": "Interview Assistant API",
+    "description": "Complete API collection for AI Interview Platform",
+    "version": "1.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "BASE_URL",
+      "value": "http://localhost:5000/api",
+      "type": "string"
+    },
+    {
+      "key": "TOKEN",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "INTERVIEW_ID",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "QUESTION_ID",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Register",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"John Doe\",\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\",\n  \"role\": \"candidate\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/auth/register",
+              "host": ["{{BASE_URL}}"],
+              "path": ["auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"john@example.com\",\n  \"password\": \"password123\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/auth/login",
+              "host": ["{{BASE_URL}}"],
+              "path": ["auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Get Current User",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/auth/me",
+              "host": ["{{BASE_URL}}"],
+              "path": ["auth", "me"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Resume",
+      "item": [
+        {
+          "name": "Upload Resume",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN}}"
+              }
+            ],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "resume",
+                  "type": "file",
+                  "src": "/path/to/your/resume.pdf"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/resume/upload",
+              "host": ["{{BASE_URL}}"],
+              "path": ["resume", "upload"]
+            }
+          }
+        },
+        {
+          "name": "Get Resume",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/resume",
+              "host": ["{{BASE_URL}}"],
+              "path": ["resume"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Interview - Candidate",
+      "item": [
+        {
+          "name": "Create Interview",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/interview/create",
+              "host": ["{{BASE_URL}}"],
+              "path": ["interview", "create"]
+            }
+          }
+        },
+        {
+          "name": "Get My Interviews",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/interview/my-interviews",
+              "host": ["{{BASE_URL}}"],
+              "path": ["interview", "my-interviews"]
+            }
+          }
+        },
+        {
+          "name": "Get Interview Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/interview/{{INTERVIEW_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["interview", "{{INTERVIEW_ID}}"]
+            }
+          }
+        },
+        {
+          "name": "Submit Answer",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"questionId\": \"{{QUESTION_ID}}\",\n  \"response\": \"This is my detailed answer to the question. I would explain the concept thoroughly with examples and demonstrate understanding.\"\n}"
+            },
+            "url": {
+              "raw": "{{BASE_URL}}/interview/{{INTERVIEW_ID}}/submit-answer",
+              "host": ["{{BASE_URL}}"],
+              "path": ["interview", "{{INTERVIEW_ID}}", "submit-answer"]
+            }
+          }
+        },
+        {
+          "name": "Complete Interview",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/interview/{{INTERVIEW_ID}}/complete",
+              "host": ["{{BASE_URL}}"],
+              "path": ["interview", "{{INTERVIEW_ID}}", "complete"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Interview - Recruiter",
+      "item": [
+        {
+          "name": "Get All Completed Interviews",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/recruiter/all-completed",
+              "host": ["{{BASE_URL}}"],
+              "path": ["recruiter", "all-completed"]
+            }
+          }
+        },
+        {
+          "name": "Get Interview with Details",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{TOKEN}}"
+              }
+            ],
+            "url": {
+              "raw": "{{BASE_URL}}/recruiter/{{INTERVIEW_ID}}",
+              "host": ["{{BASE_URL}}"],
+              "path": ["recruiter", "{{INTERVIEW_ID}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
