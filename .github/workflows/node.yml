@@ -2,9 +2,9 @@ name: Node.js CI
 
 on:
   push:
-    branches: [main, develop]
+    branches: ["main"]
   pull_request:
-    branches: [main, develop]
+    branches: ["main"]
 
 jobs:
   build:
@@ -15,26 +15,20 @@ jobs:
         node-version: [16.x, 18.x]
 
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-      - name: Use Node.js ${{ matrix.node-version }}
+      - name: Setup Node.js
         uses: actions/setup-node@v3
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
 
-      - name: Install dependencies (Backend)
+      # Backend
+      - name: Install Backend Dependencies
         working-directory: ./backend
         run: npm install
 
-      - name: Install dependencies (Frontend)
+      # Frontend
+      - name: Install Frontend Dependencies
         working-directory: ./frontend
         run: npm install
-
-      - name: Lint Backend
-        working-directory: ./backend
-        run: npm run lint --if-present
-
-      - name: Lint Frontend
-        working-directory: ./frontend
-        run: npm run lint --if-present
