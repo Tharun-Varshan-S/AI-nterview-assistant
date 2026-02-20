@@ -7,6 +7,71 @@ const RETRY_BACKOFF = [1500, 3000];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const extractJsonObject = (text) => {
+  const trimmed = String(text || '').trim();
+
+  if (!trimmed) return null;
+
+  try {
+    return JSON.parse(trimmed);
+  } catch (_) {
+    // Continue with guarded extraction when model wraps JSON in extra text/fences.
+  }
+
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start === -1 || end === -1 || start >= end) return null;
+
+  const candidate = trimmed.slice(start, end + 1);
+  try {
+    return JSON.parse(candidate);
+  } catch (_) {
+    return null;
+  }
+};
+
+const getExperienceLevelFromYears = (years) => {
+  if (years <= 1) return 'junior';
+  if (years <= 4) return 'mid';
+  return 'senior';
+};
+
+const normalizeQuestionsPayload = (payload) => {
+  if (!payload || !Array.isArray(payload.questions)) return null;
+
+  const normalized = payload.questions.map((item) => ({
+    question: String(item?.question || '').trim(),
+    difficulty: String(item?.difficulty || '').toLowerCase(),
+    timeLimit: Number(item?.timeLimit),
+  }));
+
+  const expectedDifficultyOrder = ['easy', 'easy', 'medium', 'medium', 'hard', 'hard'];
+  const isValid =
+    normalized.length === 6 &&
+    normalized.every((q) =>
+      q.question &&
+      ['easy', 'medium', 'hard'].includes(q.difficulty) &&
+      Number.isFinite(q.timeLimit) &&
+      q.timeLimit > 0
+    ) &&
+    normalized.filter((q) => q.difficulty === 'easy').length === 2 &&
+    normalized.filter((q) => q.difficulty === 'medium').length === 2 &&
+    normalized.filter((q) => q.difficulty === 'hard').length === 2 &&
+    new Set(normalized.map((q) => q.question.toLowerCase())).size === 6;
+
+  if (!isValid) return null;
+
+  const orderByDifficulty = { easy: 0, medium: 1, hard: 2 };
+  normalized.sort((a, b) => orderByDifficulty[a.difficulty] - orderByDifficulty[b.difficulty]);
+  const corrected = normalized.map((q, idx) => ({
+    ...q,
+    difficulty: expectedDifficultyOrder[idx],
+    timeLimit: expectedDifficultyOrder[idx] === 'easy' ? 20 : expectedDifficultyOrder[idx] === 'medium' ? 40 : 60,
+  }));
+
+  return { questions: corrected };
+};
+
 /**
  * Core Gemini API Caller with Rate Limiting & Retry Logic
  */
@@ -35,7 +100,11 @@ const callGemini = async (prompt, attempt = 0) => {
     }
 
     const text = response.data.candidates[0].content.parts[0].text;
-    return JSON.parse(text);
+    const parsed = extractJsonObject(text);
+    if (!parsed) {
+      throw new Error('Gemini response did not contain valid JSON');
+    }
+    return parsed;
 
   } catch (error) {
     const status = error.response?.status;
@@ -113,34 +182,72 @@ exports.generateInterviewQuestions = async (context) => {
     domainContext = `Context extracted from raw text: ${rawText.substring(0, 1000)}`;
   }
 
-  const prompt = `
-    You are a senior technical interviewer. Generate exactly 6 questions based on this resume context.
-    
-    STRICT REQUIREMENTS:
-    - Generate EXACTLY 6 questions.
-    - 2 Easy, 2 Medium, 2 Hard.
-    - 1 question MUST be scenario-based.
-    - 1 question MUST be debugging-based.
-    - 1 question MUST be system-design-level (hard).
-    - Questions must be personalized to the candidate's actual skills.
-    
-    Response format (STRICT JSON ONLY):
-    {
-      "questions": [
-        {
-          "question": "string",
-          "difficulty": "easy|medium|hard",
-          "topic": "string"
-        }
-      ]
-    }
+  const candidateName = 'Candidate';
+  const candidateSkills = structuredData
+    ? [
+      ...(structuredData.skills || []),
+      ...(structuredData.technologies || []),
+    ].filter(Boolean)
+    : [];
+  const candidateSkillsText = candidateSkills.length
+    ? candidateSkills.join(', ')
+    : 'General software engineering';
+  const experienceYears = Number(structuredData?.experienceYears || 0);
+  const experienceLevel = getExperienceLevelFromYears(experienceYears);
 
-    CANDIDATE CONTEXT:
-    ${domainContext}
-  `;
+  const prompt = `You are a backend JSON API service for an AI Interview Assistant.
+
+Your job is to generate structured interview questions.
+
+STRICT OUTPUT RULES (MUST FOLLOW):
+
+1. Return ONLY valid raw JSON.
+2. Do NOT wrap the response in markdown.
+3. Do NOT use \`\`\`json or \`\`\` anywhere.
+4. Do NOT add explanations, comments, notes, or extra text.
+5. Do NOT say things like "Here is the JSON".
+6. The response must start with { and end with } exactly.
+7. Use double quotes for all keys and string values.
+8. Do NOT include trailing commas.
+9. The output must be directly parsable using JSON.parse().
+10. If you cannot follow the format, return an empty JSON object: {}.
+
+JSON STRUCTURE (MUST MATCH EXACTLY):
+
+{
+  "questions": [
+    {
+      "question": "string",
+      "difficulty": "easy | medium | hard",
+      "timeLimit": number
+    }
+  ]
+}
+
+INTERVIEW REQUIREMENTS:
+
+- Generate exactly 6 technical interview questions.
+- 2 EASY questions (timeLimit: 20)
+- 2 MEDIUM questions (timeLimit: 40)
+- 2 HARD questions (timeLimit: 60)
+- Questions must match the candidate's skills.
+- Do NOT repeat questions.
+- Keep questions clear and professional.
+- Questions should test real technical understanding.
+
+CANDIDATE INFORMATION:
+Name: ${candidateName}
+Skills: ${candidateSkillsText}
+Experience Level: ${experienceLevel}
+
+Additional Resume Context:
+${domainContext}
+
+Generate the questions now.`;
 
   try {
-    return await callGemini(prompt);
+    const raw = await callGemini(prompt);
+    return normalizeQuestionsPayload(raw);
   } catch (error) {
     logger.error('Question generation failed');
     return null;

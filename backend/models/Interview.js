@@ -20,7 +20,8 @@ const interviewSchema = new mongoose.Schema(
       {
         question: String,
         difficulty: String,
-        topic: String
+        topic: String,
+        timeLimit: Number
       },
     ],
     answers: [
