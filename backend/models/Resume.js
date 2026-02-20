@@ -19,6 +19,21 @@ const resumeSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    structuredData: {
+      skills: [String],
+      technologies: [String],
+      experienceYears: Number,
+      education: [String],
+      primaryDomain: String
+    },
+    aiValidated: {
+      type: Boolean,
+      default: false
+    },
+    aiConfidence: {
+      type: Number,
+      default: 0
+    },
     createdAt: {
       type: Date,
       default: Date.now,

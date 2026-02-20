@@ -121,11 +121,15 @@ export default function InterviewSession() {
         setTimeKey((prev) => prev + 1);
         toast.success(autoSubmit ? 'Time up! Auto-submitted' : 'Answer submitted!');
       } else {
-        // Complete interview
-        await interviewAPI.completeInterview(id!);
+        // Final evaluation happens server-side after the last answer
         interviewStateStorage.clearState(id!); // Clear saved state
-        toast.success('Interview completed!');
-        navigate(`/candidate/results/${id}`);
+        if (updatedInterview.status === 'completed') {
+          toast.success('Interview completed!');
+          navigate(`/candidate/results/${id}`);
+        } else {
+          toast.info('Final evaluation in progress. Redirecting to results...');
+          navigate(`/candidate/results/${id}`);
+        }
       }
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Failed to submit answer';
@@ -228,7 +232,7 @@ export default function InterviewSession() {
         {submitting && (
           <div className="mb-6 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
             <Spinner size="sm" />
-            Evaluating your answer with AI. This can take a few seconds.
+            Submitting your answer. This can take a few seconds.
           </div>
         )}
 

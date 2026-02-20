@@ -1,100 +1,92 @@
 const Resume = require('../models/Resume');
 const { extractTextFromPDF } = require('../services/pdfService');
+const geminiService = require('../services/geminiService');
 const logger = require('../utils/logger');
-const AppError = require('../utils/AppError');
 
-// @route   POST /api/resume/upload
-// @desc    Upload resume PDF with validation and error handling
-// @access  Private (Candidate only)
+/**
+ * POST /api/resume/upload
+ * Optimized 2-stage layered validation
+ */
 exports.uploadResume = async (req, res, next) => {
   try {
     if (!req.file) {
-      return res.status(400).json({ success: false, message: 'Please upload a PDF file' });
+      return res.status(400).json({ success: false, message: 'No file uploaded' });
     }
 
-    logger.info('Resume upload started', { fileName: req.file.originalname, size: req.file.size });
+    // --- STAGE 1: HARD VALIDATION (MANDATORY) ---
 
-    // Extract text from PDF with error handling
-    let extractedText;
-    try {
-      extractedText = await extractTextFromPDF(req.file.path);
-      
-      // Validate extracted text
-      if (!extractedText || extractedText.trim().length === 0) {
-        logger.warn('Resume PDF appears empty or unreadable');
-        return res.status(400).json({
-          success: false,
-          message: 'Resume appears empty. Please upload a valid resume PDF.',
-        });
-      }
-      
-      logger.debug('PDF text extraction successful', { textLength: extractedText.length });
-    } catch (pdfError) {
-      logger.error('Resume PDF parsing failed', pdfError);
-      
-      // Check if it's a specific PDF error type
-      if (pdfError.message && pdfError.message.includes('PDF')) {
-        return res.status(400).json({
-          success: false,
-          message: 'Failed to parse resume. Please ensure it\'s a valid PDF file.',
-        });
-      }
-      
-      throw new AppError('Resume parsing failed. Please try again.', 500, 'RESUME_PARSE_ERROR');
+    // 1. MIME Type
+    if (!['application/pdf'].includes(req.file.mimetype)) {
+      return res.status(400).json({ success: false, message: 'Only PDF files are accepted' });
     }
 
-    // Check if user already has a resume
-    const existingResume = await Resume.findOne({ userId: req.user.id });
-    if (existingResume) {
-      // Update existing resume
-      existingResume.filePath = req.file.path;
-      existingResume.fileName = req.file.originalname;
-      existingResume.extractedText = extractedText;
-      await existingResume.save();
+    // 2. File Size (Multer handles this, but secondary check)
+    if (req.file.size > 5 * 1024 * 1024) {
+      return res.status(400).json({ success: false, message: 'File too large (max 5MB)' });
+    }
 
-      logger.info('Resume updated successfully', { userId: req.user.id });
-      return res.status(200).json({
-        success: true,
-        message: 'Resume updated successfully',
-        resume: existingResume,
+    // 3. Extract Text
+    const text = await extractTextFromPDF(req.file.path);
+    const words = text.trim().split(/\s+/);
+
+    // 4. Minimum 150 words
+    if (words.length < 150) {
+      return res.status(400).json({
+        success: false,
+        message: 'Resume content too short. Minimum 150 words required.'
       });
     }
 
-    // Create new resume
-    const resume = await Resume.create({
+    // 5. Keyword Check (Experience, Education, Skills, Projects, Work)
+    const criticalKeywords = ["experience", "education", "skills", "projects", "work"];
+    const lowerText = text.toLowerCase();
+    const foundKeywords = criticalKeywords.filter(k => lowerText.includes(k));
+
+    if (foundKeywords.length < 2) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid resume structure. Missing core sections like Experience or Skills.'
+      });
+    }
+
+    // --- STAGE 2: AI VALIDATION + EXTRACTION ---
+
+    const structuredData = await geminiService.validateAndExtractResume(text);
+
+    const resumeData = {
       userId: req.user.id,
       filePath: req.file.path,
       fileName: req.file.originalname,
-      extractedText,
-    });
+      extractedText: text,
+      structuredData: structuredData || null,
+      aiValidated: !!structuredData?.isResume,
+      aiConfidence: structuredData?.confidence || 0
+    };
 
-    logger.info('Resume created successfully', { userId: req.user.id, resumeId: resume._id });
+    // Update or Create
+    const resume = await Resume.findOneAndUpdate(
+      { userId: req.user.id },
+      resumeData,
+      { upsert: true, new: true }
+    );
+
     res.status(201).json({
       success: true,
-      message: 'Resume uploaded successfully',
-      resume,
+      message: 'Resume uploaded and processed successfully',
+      data: resume
     });
+
   } catch (error) {
-    logger.error('Resume upload error', error);
+    logger.error('Resume upload failed', error);
     next(error);
   }
 };
 
-// @route   GET /api/resume
-// @desc    Get candidate's resume
-// @access  Private
 exports.getResume = async (req, res, next) => {
   try {
     const resume = await Resume.findOne({ userId: req.user.id });
-
-    if (!resume) {
-      return res.status(404).json({ success: false, message: 'Resume not found' });
-    }
-
-    res.status(200).json({
-      success: true,
-      resume,
-    });
+    if (!resume) return res.status(404).json({ success: false, message: 'Resume not found' });
+    res.json({ success: true, data: resume });
   } catch (error) {
     next(error);
   }

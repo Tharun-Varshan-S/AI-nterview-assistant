@@ -94,6 +94,15 @@ export interface Resume {
   filePath: string;
   fileName: string;
   extractedText: string;
+  structuredData?: {
+    skills: string[];
+    technologies: string[];
+    experienceYears: number;
+    education: string[];
+    primaryDomain: string;
+  };
+  aiValidated: boolean;
+  aiConfidence: number;
   createdAt: string;
 }
 
@@ -103,22 +112,23 @@ export interface Question {
   difficulty: 'easy' | 'medium' | 'hard';
 }
 
-export interface AIEvaluation {
+export interface FinalEvaluation {
   overallScore: number;
   technicalAccuracy: number;
   clarity: number;
   depth: number;
+  problemSolving: number;
   strengths: string[];
   weaknesses: string[];
-  improvementSuggestions: string[];
+  improvements: string[];
+  hiringRecommendation: 'strong-hire' | 'hire' | 'no-hire' | 'no-decision';
+  evaluatedAt?: string;
 }
 
 export interface Answer {
   questionId: string;
   question: string;
   response: string;
-  aiEvaluation?: AIEvaluation;
-  evaluatedAt?: string;
 }
 
 export interface Interview {
@@ -127,6 +137,7 @@ export interface Interview {
   status: 'in-progress' | 'completed';
   questions: Question[];
   answers: Answer[];
+  finalEvaluation?: FinalEvaluation;
   totalScore: number;
   averageScore: number;
   createdAt: string;
@@ -156,65 +167,65 @@ export const resumeAPI = {
   upload: async (file: File) => {
     const formData = new FormData();
     formData.append('resume', file);
-    const { data } = await api.post<{ success: boolean; resume: Resume }>('/resume/upload', formData, {
+    const { data } = await api.post<{ success: boolean; data: Resume }>('/resume/upload', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },
     });
-    return data.resume;
+    return data.data;
   },
 
   get: async () => {
-    const { data } = await api.get<{ success: boolean; resume: Resume }>('/resume');
-    return data.resume;
+    const { data } = await api.get<{ success: boolean; data: Resume }>('/resume');
+    return data.data;
   },
 };
 
 // Interview API
 export const interviewAPI = {
   create: async () => {
-    const { data } = await api.post<{ success: boolean; interview: Interview }>('/interview/create');
-    return data.interview;
+    const { data } = await api.post<{ success: boolean; data: Interview }>('/interview/create');
+    return data.data;
   },
 
   getMyInterviews: async () => {
-    const { data } = await api.get<{ success: boolean; interviews: Interview[] }>('/interview/my-interviews');
-    return data.interviews;
+    const { data } = await api.get<{ success: boolean; data: Interview[] }>('/interview/my-interviews');
+    return data.data;
   },
 
   getInterviewById: async (id: string) => {
-    const { data } = await api.get<{ success: boolean; interview: Interview }>(`/interview/${id}`);
-    return data.interview;
+    const { data } = await api.get<{ success: boolean; data: Interview }>(`/interview/${id}`);
+    return data.data;
   },
 
   submitAnswer: async (interviewId: string, questionId: string, response: string) => {
-    const { data } = await api.post<{ success: boolean; answer: Answer; interview: Interview }>(
+    const { data } = await api.post<{ success: boolean; data: { answer: Answer; interview: Interview } }>(
       `/interview/${interviewId}/submit-answer`,
       { questionId, response }
     );
-    return data;
+    return data.data;
   },
 
   completeInterview: async (interviewId: string) => {
-    const { data } = await api.put<{ success: boolean; interview: Interview }>(
+    const { data } = await api.put<{ success: boolean; data: Interview }>(
       `/interview/${interviewId}/complete`
     );
-    return data.interview;
+    return data.data;
   },
 };
 
 // Recruiter API
 export const recruiterAPI = {
   getAllCompletedInterviews: async () => {
-    const { data } = await api.get<{ success: boolean; interviews: Interview[] }>('/interview/recruiter/all-completed');
-    return data.interviews;
+    const { data } = await api.get<{ success: boolean; data: Interview[] }>('/interview/recruiter/all-completed');
+    return data.data;
   },
 
   getInterviewWithDetails: async (id: string) => {
-    const { data } = await api.get<{ success: boolean; interview: Interview; resume: Resume }>(
+    const { data } = await api.get<{ success: boolean; data: { interview: Interview; resume: Resume } }>(
       `/interview/recruiter/${id}`
     );
-    return data;
+    return data.data;
   },
 };
 

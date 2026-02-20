@@ -4,13 +4,53 @@ import { interviewAPI, Interview } from '../services/api';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
 import DifficultyBadge from '../components/DifficultyBadge';
-import { Award, TrendingUp, CheckCircle, XCircle, Lightbulb, ArrowLeft } from 'lucide-react';
+import { Award, TrendingUp, CheckCircle, XCircle, Lightbulb, ArrowLeft, AlertCircle } from 'lucide-react';
+
+// Helper component for safe score display
+const ScoreDisplay = ({ score, label, color = 'blue' }: { score?: number; label: string; color?: string }) => {
+  const colorClasses = {
+    blue: 'bg-blue-50 border-blue-200 text-blue-700',
+    emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
+    purple: 'bg-purple-50 border-purple-200 text-purple-700',
+    amber: 'bg-amber-50 border-amber-200 text-amber-700',
+  };
+  
+  const displayScore = score ?? '—';
+  const formattedScore = typeof displayScore === 'number' ? displayScore.toFixed(1) : displayScore;
+  
+  return (
+    <div className={`rounded-lg border p-4 ${colorClasses[color as keyof typeof colorClasses] || colorClasses.blue}`}>
+      <p className="text-sm font-medium text-slate-600 mb-1">{label}</p>
+      <div className="text-2xl font-bold">{formattedScore}</div>
+    </div>
+  );
+};
+
+// Helper component for list items
+const ListItem = ({ text, icon, color }: { text: string; icon: string; color: string }) => (
+  <li className="text-sm flex items-start gap-2">
+    <span className={`mt-1 ${color}`}>{icon}</span>
+    <span className="text-slate-700">{text}</span>
+  </li>
+);
+
+// Fallback UI for missing evaluation
+const EvaluationFallback = () => (
+  <div className="rounded-lg border-2 border-yellow-200 bg-yellow-50 p-6 text-center">
+    <AlertCircle className="mx-auto mb-3 text-yellow-600" size={32} />
+    <p className="text-sm font-medium text-yellow-800">Evaluation Not Available</p>
+    <p className="text-xs text-yellow-700 mt-2">
+      The final evaluation is still being processed. Please refresh the page in a few moments.
+    </p>
+  </div>
+);
 
 export default function InterviewResults() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [interview, setInterview] = useState<Interview | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadResults();
@@ -19,18 +59,19 @@ export default function InterviewResults() {
   const loadResults = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await interviewAPI.getInterviewById(id!);
       
       if (data.status !== 'completed') {
-        toast.error('Interview is not completed yet');
-        navigate(`/candidate/interview/${id}`);
+        setError('Interview is not completed yet');
         return;
       }
       
       setInterview(data);
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to load results');
-      navigate('/candidate/dashboard');
+    } catch (err: any) {
+      const errorMsg = err.response?.data?.message || 'Failed to load results';
+      setError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setLoading(false);
     }
@@ -44,13 +85,29 @@ export default function InterviewResults() {
     );
   }
 
-  if (!interview) return null;
-
-  const getScoreColor = (score: number) => {
-    if (score >= 8) return 'text-green-600';
-    if (score >= 6) return 'text-yellow-600';
-    return 'text-red-600';
-  };
+  if (error || !interview) {
+    return (
+      <div className="max-w-5xl mx-auto space-y-4">
+        <button
+          onClick={() => navigate('/candidate/dashboard')}
+          className="flex items-center gap-2 text-slate-600 hover:text-slate-900"
+        >
+          <ArrowLeft size={20} />
+          Back to Dashboard
+        </button>
+        <div className="rounded-lg border-2 border-red-200 bg-red-50 p-6 text-center">
+          <AlertCircle className="mx-auto mb-3 text-red-600" size={32} />
+          <p className="text-sm font-medium text-red-800">{error || 'Failed to load results'}</p>
+          <button
+            onClick={() => navigate('/candidate/dashboard')}
+            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
+          >
+            Return to Dashboard
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   const getScoreLabel = (score: number) => {
     if (score >= 8) return 'Excellent';
@@ -58,6 +115,10 @@ export default function InterviewResults() {
     if (score >= 4) return 'Fair';
     return 'Needs Improvement';
   };
+
+  const finalEvaluation = interview.finalEvaluation;
+  const overallScore = finalEvaluation?.overallScore ?? interview.averageScore ?? 0;
+  const hasEvaluation = finalEvaluation && Object.keys(finalEvaluation).length > 0;
 
   return (
     <div className="max-w-5xl mx-auto space-y-8">
@@ -81,14 +142,14 @@ export default function InterviewResults() {
             <div className="mt-4 h-2 rounded-full bg-white/15">
               <div
                 className="h-2 rounded-full bg-emerald-400"
-                style={{ width: `${Math.min(100, interview.averageScore * 10)}%` }}
+                style={{ width: `${Math.min(100, overallScore * 10)}%` }}
               />
             </div>
           </div>
           <div className="text-center">
             <Award size={48} className="mx-auto mb-2" />
-            <div className="text-5xl font-bold">{interview.averageScore.toFixed(1)}</div>
-            <p className="text-lg mt-1">{getScoreLabel(interview.averageScore)}</p>
+            <div className="text-5xl font-bold">{overallScore.toFixed(1)}</div>
+            <p className="text-lg mt-1">{getScoreLabel(overallScore)}</p>
           </div>
         </div>
       </div>
@@ -99,210 +160,166 @@ export default function InterviewResults() {
           <TrendingUp size={24} />
           Performance Summary
         </h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="text-center p-4 bg-slate-50 rounded-xl border border-slate-200">
-            <div className="text-2xl font-bold text-slate-900">{interview.questions.length}</div>
-            <p className="text-slate-600">Total Questions</p>
-          </div>
-          <div className="text-center p-4 bg-emerald-50 rounded-xl border border-emerald-200">
-            <div className="text-2xl font-bold text-emerald-700">{interview.answers.length}</div>
-            <p className="text-slate-600">Answered</p>
-          </div>
-          <div className="text-center p-4 bg-blue-50 rounded-xl border border-blue-200">
-            <div className="text-2xl font-bold text-blue-700">
-              {interview.totalScore.toFixed(1)}
-            </div>
-            <p className="text-slate-600">Total Score</p>
-          </div>
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+          <ScoreDisplay
+            score={interview.questions.length}
+            label="Total Questions"
+            color="blue"
+          />
+          <ScoreDisplay
+            score={finalEvaluation?.technicalAccuracy}
+            label="Technical Accuracy"
+            color="blue"
+          />
+          <ScoreDisplay
+            score={finalEvaluation?.clarity}
+            label="Clarity"
+            color="emerald"
+          />
+          <ScoreDisplay
+            score={finalEvaluation?.depth}
+            label="Depth"
+            color="purple"
+          />
+          <ScoreDisplay
+            score={finalEvaluation?.problemSolving}
+            label="Problem Solving"
+            color="amber"
+          />
         </div>
       </div>
 
-      {/* Question-by-Question Analysis */}
+      {/* Final Evaluation */}
       <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
-        <h2 className="text-xl font-semibold mb-4">Detailed Analysis</h2>
-        <div className="space-y-6">
-          {interview.answers.map((answer, index) => {
-            const evaluation = answer.aiEvaluation;
-            
-            return (
-              <div key={answer.questionId} className="border border-slate-200 rounded-xl p-6 bg-white/80">
-                {/* Question Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
-                      <span className="text-sm font-medium text-slate-500">Question {index + 1}</span>
-                      <DifficultyBadge
-                        difficulty={
-                          interview.questions.find((q) => q.id === answer.questionId)?.difficulty ||
-                          'medium'
-                        }
-                      />
-                    </div>
-                    <h3 className="text-lg font-medium text-slate-900">{answer.question}</h3>
-                  </div>
-                  {evaluation && (
-                    <div className="text-right ml-4">
-                      <div className={`text-3xl font-bold ${getScoreColor(evaluation.overallScore)}`}>
-                        {evaluation.overallScore.toFixed(1)}
-                      </div>
-                      <p className="text-sm text-slate-500">Score</p>
-                      <div className="mt-2 h-2 w-24 rounded-full bg-slate-100">
-                        <div
-                          className="h-2 rounded-full bg-emerald-500"
-                          style={{ width: `${Math.min(100, evaluation.overallScore * 10)}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
+        <h2 className="text-xl font-semibold mb-4">Final Evaluation</h2>
+        {hasEvaluation ? (
+          <div className="space-y-6">
+            {/* Evaluation Metrics */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
+                <p className="text-xs font-medium text-blue-600 uppercase tracking-wide">Technical Accuracy</p>
+                <div className="text-2xl font-bold text-blue-700 mt-2">
+                  {finalEvaluation?.technicalAccuracy?.toFixed(1) ?? '—'}
                 </div>
-
-                {/* Your Answer */}
-                <div className="mb-4">
-                  <h4 className="text-sm font-medium text-slate-700 mb-2">Your Answer:</h4>
-                  <div className="bg-slate-50 rounded-lg p-4 text-slate-800">
-                    {answer.response}
-                  </div>
+              </div>
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+                <p className="text-xs font-medium text-emerald-600 uppercase tracking-wide">Clarity</p>
+                <div className="text-2xl font-bold text-emerald-700 mt-2">
+                  {finalEvaluation?.clarity?.toFixed(1) ?? '—'}
                 </div>
+              </div>
+              <div className="rounded-lg border border-purple-100 bg-purple-50 p-4">
+                <p className="text-xs font-medium text-purple-600 uppercase tracking-wide">Depth</p>
+                <div className="text-2xl font-bold text-purple-700 mt-2">
+                  {finalEvaluation?.depth?.toFixed(1) ?? '—'}
+                </div>
+              </div>
+              <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
+                <p className="text-xs font-medium text-amber-600 uppercase tracking-wide">Problem Solving</p>
+                <div className="text-2xl font-bold text-amber-700 mt-2">
+                  {finalEvaluation?.problemSolving?.toFixed(1) ?? '—'}
+                </div>
+              </div>
+            </div>
 
-                {/* AI Evaluation */}
-                {evaluation && (
-                  <div className="space-y-4">
-                    {/* Score Breakdown */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div className="rounded-lg border border-blue-100 bg-blue-50 p-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-xs text-blue-600">Technical Accuracy</p>
-                            <div className="text-lg font-semibold text-blue-700">
-                              {evaluation.technicalAccuracy.toFixed(1)}
-                            </div>
-                          </div>
-                          <div className="h-10 w-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center text-xs font-semibold">
-                            {Math.round(evaluation.technicalAccuracy * 10)}%
-                          </div>
-                        </div>
-                        <div className="mt-3 h-2 rounded-full bg-blue-100">
-                          <div
-                            className="h-2 rounded-full bg-blue-600"
-                            style={{ width: `${Math.min(100, evaluation.technicalAccuracy * 10)}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-xs text-emerald-600">Clarity</p>
-                            <div className="text-lg font-semibold text-emerald-700">
-                              {evaluation.clarity.toFixed(1)}
-                            </div>
-                          </div>
-                          <div className="h-10 w-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-semibold">
-                            {Math.round(evaluation.clarity * 10)}%
-                          </div>
-                        </div>
-                        <div className="mt-3 h-2 rounded-full bg-emerald-100">
-                          <div
-                            className="h-2 rounded-full bg-emerald-600"
-                            style={{ width: `${Math.min(100, evaluation.clarity * 10)}%` }}
-                          />
-                        </div>
-                      </div>
-                      <div className="rounded-lg border border-purple-100 bg-purple-50 p-3">
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-xs text-purple-600">Depth</p>
-                            <div className="text-lg font-semibold text-purple-700">
-                              {evaluation.depth.toFixed(1)}
-                            </div>
-                          </div>
-                          <div className="h-10 w-10 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-semibold">
-                            {Math.round(evaluation.depth * 10)}%
-                          </div>
-                        </div>
-                        <div className="mt-3 h-2 rounded-full bg-purple-100">
-                          <div
-                            className="h-2 rounded-full bg-purple-600"
-                            style={{ width: `${Math.min(100, evaluation.depth * 10)}%` }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Strengths */}
-                    <div>
-                      <h4 className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
-                        <CheckCircle size={16} className="text-emerald-600" />
-                        Strengths
-                      </h4>
-                      {evaluation.strengths.length > 0 ? (
-                        <ul className="space-y-1">
-                          {evaluation.strengths.map((strength, i) => (
-                            <li key={i} className="text-sm text-slate-700 flex items-start gap-2">
-                              <span className="text-emerald-600 mt-1">✓</span>
-                              <span>{strength}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-slate-500">No strengths were highlighted for this answer.</p>
-                      )}
-                    </div>
-
-                    {/* Weaknesses */}
-                    <div>
-                      <h4 className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
-                        <XCircle size={16} className="text-rose-600" />
-                        Areas to Improve
-                      </h4>
-                      {evaluation.weaknesses.length > 0 ? (
-                        <ul className="space-y-1">
-                          {evaluation.weaknesses.map((weakness, i) => (
-                            <li key={i} className="text-sm text-slate-700 flex items-start gap-2">
-                              <span className="text-rose-600 mt-1">✗</span>
-                              <span>{weakness}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-slate-500">No improvement areas were flagged.</p>
-                      )}
-                    </div>
-
-                    {/* Improvement Suggestions */}
-                    <div>
-                      <h4 className="text-sm font-medium text-slate-700 mb-2 flex items-center gap-2">
-                        <Lightbulb size={16} className="text-amber-600" />
-                        Next-step Suggestions
-                      </h4>
-                      {evaluation.improvementSuggestions.length > 0 ? (
-                        <ul className="space-y-1">
-                          {evaluation.improvementSuggestions.map((suggestion, i) => (
-                            <li key={i} className="text-sm text-slate-700 flex items-start gap-2">
-                              <span className="text-amber-600 mt-1">•</span>
-                              <span>{suggestion}</span>
-                            </li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <p className="text-sm text-slate-500">No suggestions were provided.</p>
-                      )}
-                    </div>
-                  </div>
+            {/* Strengths, Weaknesses, Improvements */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
+                <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                  <CheckCircle size={18} className="text-emerald-600" />
+                  Strengths
+                </h4>
+                {finalEvaluation?.strengths && finalEvaluation.strengths.length > 0 ? (
+                  <ul className="space-y-2">
+                    {finalEvaluation.strengths.map((strength, i) => (
+                      <ListItem key={i} text={strength} icon="✓" color="text-emerald-600" />
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-slate-500 italic">No strengths available</p>
                 )}
               </div>
-            );
-          })}
-        </div>
+
+              <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
+                <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                  <XCircle size={18} className="text-rose-600" />
+                  Weaknesses
+                </h4>
+                {finalEvaluation?.weaknesses && finalEvaluation.weaknesses.length > 0 ? (
+                  <ul className="space-y-2">
+                    {finalEvaluation.weaknesses.map((weakness, i) => (
+                      <ListItem key={i} text={weakness} icon="✗" color="text-rose-600" />
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-slate-500 italic">No weaknesses identified</p>
+                )}
+              </div>
+
+              <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
+                <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
+                  <Lightbulb size={18} className="text-yellow-600" />
+                  Improvements
+                </h4>
+                {finalEvaluation?.improvements && finalEvaluation.improvements.length > 0 ? (
+                  <ul className="space-y-2">
+                    {finalEvaluation.improvements.map((improvement, i) => (
+                      <ListItem key={i} text={improvement} icon="💡" color="text-yellow-600" />
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-slate-500 italic">No improvements suggested</p>
+                )}
+              </div>
+            </div>
+
+            {/* Hiring Recommendation */}
+            <div className="rounded-xl border border-slate-300 bg-gradient-to-r from-slate-50 to-slate-100 p-6">
+              <p className="text-sm font-medium text-slate-600 mb-2">Hiring Recommendation</p>
+              <p className="text-lg font-bold text-slate-900 capitalize">
+                {finalEvaluation?.hiringRecommendation?.replace('-', ' ') ?? 'No Decision'}
+              </p>
+              <p className="text-xs text-slate-500 mt-2">
+                Based on comprehensive evaluation of technical skills, communication, and problem-solving ability.
+              </p>
+            </div>
+          </div>
+        ) : (
+          <EvaluationFallback />
+        )}
       </div>
 
-      {/* Action Button */}
-      <div className="text-center">
-        <button
-          onClick={() => navigate('/candidate/dashboard')}
-          className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors font-medium"
-        >
-          Return to Dashboard
-        </button>
+      {/* Interview Q&A */}
+      <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
+        <h2 className="text-xl font-semibold mb-4">Interview Q&A</h2>
+        <div className="space-y-6">
+          {interview.answers && interview.answers.length > 0 ? (
+            interview.answers.map((answer, index) => {
+              const question = interview.questions?.find((q) => q.id === answer.questionId);
+              return (
+                <div key={answer.questionId} className="border border-slate-200 rounded-xl p-6 bg-white/80 hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="text-sm font-medium text-slate-500">Question {index + 1}</span>
+                        {question && <DifficultyBadge difficulty={question.difficulty} />}
+                      </div>
+                      <h3 className="text-base font-medium text-slate-900">{answer.question}</h3>
+                    </div>
+                  </div>
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-700 mb-2">Your Answer:</h4>
+                    <div className="bg-slate-50 rounded-lg p-4 text-sm text-slate-800 border border-slate-200">
+                      {answer.response || 'No response provided'}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-sm text-slate-500 text-center py-8">No Q&A recorded</p>
+          )}
+        </div>
       </div>
     </div>
   );

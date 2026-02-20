@@ -51,18 +51,15 @@ export default function CandidateDetailView() {
   if (!interview) return null;
 
   const user = interview.userId as User;
-  const getScoreColor = (score: number) => {
-    if (score >= 8) return 'text-green-600';
-    if (score >= 6) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
   const getScoreLabel = (score: number) => {
     if (score >= 8) return 'Excellent';
     if (score >= 6) return 'Good';
     if (score >= 4) return 'Fair';
     return 'Needs Improvement';
   };
+
+  const finalEvaluation = interview.finalEvaluation;
+  const overallScore = finalEvaluation?.overallScore ?? interview.averageScore ?? 0;
 
   return (
     <div className="max-w-7xl mx-auto space-y-6">
@@ -92,8 +89,8 @@ export default function CandidateDetailView() {
           </div>
           <div className="text-center bg-white/20 rounded-xl p-6">
             <Award size={48} className="mx-auto mb-2" />
-            <div className="text-5xl font-bold">{interview.averageScore.toFixed(1)}</div>
-            <p className="text-lg mt-1">{getScoreLabel(interview.averageScore)}</p>
+            <div className="text-5xl font-bold">{overallScore.toFixed(1)}</div>
+            <p className="text-lg mt-1">{getScoreLabel(overallScore)}</p>
           </div>
         </div>
       </div>
@@ -107,39 +104,146 @@ export default function CandidateDetailView() {
               <TrendingUp size={24} />
               Performance Metrics
             </h2>
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="text-center p-4 bg-blue-50 rounded-lg">
                 <div className="text-2xl font-bold text-blue-600">
-                  {interview.totalScore.toFixed(1)}
+                  {finalEvaluation ? finalEvaluation.technicalAccuracy.toFixed(1) : '—'}
                 </div>
-                <p className="text-sm text-gray-600">Total Score</p>
+                <p className="text-sm text-gray-600">Technical Accuracy</p>
               </div>
               <div className="text-center p-4 bg-green-50 rounded-lg">
                 <div className="text-2xl font-bold text-green-600">
-                  {interview.averageScore.toFixed(1)}
+                  {finalEvaluation ? finalEvaluation.clarity.toFixed(1) : '—'}
                 </div>
-                <p className="text-sm text-gray-600">Average Score</p>
+                <p className="text-sm text-gray-600">Clarity</p>
               </div>
               <div className="text-center p-4 bg-indigo-50 rounded-lg">
                 <div className="text-2xl font-bold text-indigo-600">
-                  {interview.answers.length}
+                  {finalEvaluation ? finalEvaluation.depth.toFixed(1) : '—'}
                 </div>
-                <p className="text-sm text-gray-600">Answered</p>
+                <p className="text-sm text-gray-600">Depth</p>
+              </div>
+              <div className="text-center p-4 bg-amber-50 rounded-lg">
+                <div className="text-2xl font-bold text-amber-600">
+                  {finalEvaluation ? finalEvaluation.problemSolving.toFixed(1) : '—'}
+                </div>
+                <p className="text-sm text-gray-600">Problem Solving</p>
               </div>
             </div>
           </div>
 
-          {/* Question-by-Question Analysis */}
+          {/* Final Evaluation */}
           <div className="bg-white rounded-xl shadow-sm border p-6">
-            <h2 className="text-xl font-semibold mb-4">Detailed Interview Analysis</h2>
+            <h2 className="text-xl font-semibold mb-4">Final Evaluation</h2>
+            {finalEvaluation && Object.keys(finalEvaluation).length > 0 ? (
+              <div className="space-y-6">
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
+                    <p className="text-xs font-medium text-blue-600 mb-1">Technical Accuracy</p>
+                    <div className="text-2xl font-bold text-blue-700">
+                      {finalEvaluation?.technicalAccuracy?.toFixed(1) ?? '—'}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <p className="text-xs font-medium text-emerald-600 mb-1">Clarity</p>
+                    <div className="text-2xl font-bold text-emerald-700">
+                      {finalEvaluation?.clarity?.toFixed(1) ?? '—'}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-purple-50 border border-purple-200">
+                    <p className="text-xs font-medium text-purple-600 mb-1">Depth</p>
+                    <div className="text-2xl font-bold text-purple-700">
+                      {finalEvaluation?.depth?.toFixed(1) ?? '—'}
+                    </div>
+                  </div>
+                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
+                    <p className="text-xs font-medium text-amber-600 mb-1">Problem Solving</p>
+                    <div className="text-2xl font-bold text-amber-700">
+                      {finalEvaluation?.problemSolving?.toFixed(1) ?? '—'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
+                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                      <CheckCircle size={16} className="text-emerald-600" />
+                      Strengths
+                    </h4>
+                    {finalEvaluation?.strengths && finalEvaluation.strengths.length > 0 ? (
+                      <ul className="space-y-2">
+                        {finalEvaluation.strengths.map((strength, i) => (
+                          <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                            <span className="text-emerald-600 mt-0.5">✓</span>
+                            <span>{strength}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No strengths recorded</p>
+                    )}
+                  </div>
+                  <div className="p-4 rounded-lg bg-rose-50 border border-rose-200">
+                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                      <XCircle size={16} className="text-rose-600" />
+                      Weaknesses
+                    </h4>
+                    {finalEvaluation?.weaknesses && finalEvaluation.weaknesses.length > 0 ? (
+                      <ul className="space-y-2">
+                        {finalEvaluation.weaknesses.map((weakness, i) => (
+                          <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                            <span className="text-rose-600 mt-0.5">✗</span>
+                            <span>{weakness}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No weaknesses identified</p>
+                    )}
+                  </div>
+                  <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
+                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
+                      <Lightbulb size={16} className="text-yellow-600" />
+                      Improvements
+                    </h4>
+                    {finalEvaluation?.improvements && finalEvaluation.improvements.length > 0 ? (
+                      <ul className="space-y-2">
+                        {finalEvaluation.improvements.map((improvement, i) => (
+                          <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
+                            <span className="text-yellow-600 mt-0.5">💡</span>
+                            <span>{improvement}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-sm text-gray-500 italic">No suggestions available</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-lg border border-gray-300 bg-gradient-to-r from-gray-50 to-gray-100">
+                  <p className="text-sm font-medium text-gray-600 mb-2">Hiring Recommendation</p>
+                  <p className="text-lg font-bold text-gray-900 capitalize">
+                    {finalEvaluation?.hiringRecommendation?.replace('-', ' ') ?? 'No Decision'}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center p-6 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <p className="text-sm text-yellow-800">Evaluation data not available</p>
+              </div>
+            )}
+          </div>
+
+          {/* Interview Q&A */}
+          <div className="bg-white rounded-xl shadow-sm border p-6">
+            <h2 className="text-xl font-semibold mb-4">Interview Q&A</h2>
             <div className="space-y-6">
               {interview.answers.map((answer, index) => {
-                const evaluation = answer.aiEvaluation;
                 const question = interview.questions.find((q) => q.id === answer.questionId);
 
                 return (
                   <div key={answer.questionId} className="border rounded-lg p-6">
-                    {/* Question Header */}
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
@@ -150,22 +254,8 @@ export default function CandidateDetailView() {
                         </div>
                         <h3 className="text-lg font-medium text-gray-900">{answer.question}</h3>
                       </div>
-                      {evaluation && (
-                        <div className="text-right ml-4">
-                          <div
-                            className={`text-3xl font-bold ${getScoreColor(
-                              evaluation.overallScore
-                            )}`}
-                          >
-                            {evaluation.overallScore.toFixed(1)}
-                          </div>
-                          <p className="text-sm text-gray-600">Score</p>
-                        </div>
-                      )}
                     </div>
-
-                    {/* Candidate's Answer */}
-                    <div className="mb-4">
+                    <div>
                       <h4 className="text-sm font-medium text-gray-700 mb-2">
                         Candidate's Answer:
                       </h4>
@@ -173,87 +263,6 @@ export default function CandidateDetailView() {
                         {answer.response}
                       </div>
                     </div>
-
-                    {/* AI Evaluation */}
-                    {evaluation && (
-                      <div className="space-y-4">
-                        {/* Score Breakdown */}
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="text-center p-3 bg-blue-50 rounded">
-                            <div className="text-lg font-semibold text-blue-600">
-                              {evaluation.technicalAccuracy.toFixed(1)}
-                            </div>
-                            <p className="text-xs text-gray-600">Technical</p>
-                          </div>
-                          <div className="text-center p-3 bg-green-50 rounded">
-                            <div className="text-lg font-semibold text-green-600">
-                              {evaluation.clarity.toFixed(1)}
-                            </div>
-                            <p className="text-xs text-gray-600">Clarity</p>
-                          </div>
-                          <div className="text-center p-3 bg-purple-50 rounded">
-                            <div className="text-lg font-semibold text-purple-600">
-                              {evaluation.depth.toFixed(1)}
-                            </div>
-                            <p className="text-xs text-gray-600">Depth</p>
-                          </div>
-                        </div>
-
-                        {/* Strengths */}
-                        {evaluation.strengths.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                              <CheckCircle size={16} className="text-green-600" />
-                              Strengths
-                            </h4>
-                            <ul className="space-y-1">
-                              {evaluation.strengths.map((strength, i) => (
-                                <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
-                                  <span className="text-green-600 mt-1">✓</span>
-                                  <span>{strength}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {/* Weaknesses */}
-                        {evaluation.weaknesses.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                              <XCircle size={16} className="text-red-600" />
-                              Areas for Improvement
-                            </h4>
-                            <ul className="space-y-1">
-                              {evaluation.weaknesses.map((weakness, i) => (
-                                <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
-                                  <span className="text-red-600 mt-1">✗</span>
-                                  <span>{weakness}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-
-                        {/* Improvement Suggestions */}
-                        {evaluation.improvementSuggestions.length > 0 && (
-                          <div>
-                            <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                              <Lightbulb size={16} className="text-yellow-600" />
-                              Suggestions
-                            </h4>
-                            <ul className="space-y-1">
-                              {evaluation.improvementSuggestions.map((suggestion, i) => (
-                                <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
-                                  <span className="text-yellow-600 mt-1">💡</span>
-                                  <span>{suggestion}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )}
                   </div>
                 );
               })}

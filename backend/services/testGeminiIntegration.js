@@ -1,7 +1,11 @@
 // Load environment variables from .env file
 require('dotenv').config();
 
-const { evaluateAnswerWithGemini } = require('./geminiService');
+const {
+  validateResumeWithGemini,
+  generateRoleBasedQuestionsWithGemini,
+  evaluateFinalInterviewWithGemini,
+} = require('./geminiService');
 
 /**
  * Test Gemini API Integration
@@ -15,20 +19,40 @@ async function testGeminiIntegration() {
   console.log('=' .repeat(60));
 
   // Test data
-  const question = 'What is the difference between let, const, and var in JavaScript?';
-  const answer = `Let and const are block-scoped variables introduced in ES6, while var is function-scoped. 
-  Const creates immutable bindings - you cannot reassign the variable, though the object it points to can be mutated. 
-  Let allows reassignment within its scope. Var is hoisted to the top of its function and can lead to unexpected behavior.`;
-  const resumeText = 'Experience: 3 years JavaScript development, React, Node.js';
+  const resumeText = 'Experience: 3 years JavaScript development, React, Node.js. Built REST APIs, worked on UI performance, and delivered production features.';
 
   try {
-    console.log('📝 Question:', question);
-    console.log('\n💬 Answer:', answer.substring(0, 100) + '...');
     console.log('\n📄 Resume:', resumeText);
     console.log('\n' + '='.repeat(60));
     console.log('\n⏳ Calling Gemini API...\n');
 
-    const evaluation = await evaluateAnswerWithGemini(question, answer, resumeText);
+    const resumeValidation = await validateResumeWithGemini(resumeText);
+    console.log('\n✅ Resume Validation:\n');
+    console.log(JSON.stringify(resumeValidation, null, 2));
+
+    const questions = await generateRoleBasedQuestionsWithGemini({
+      detectedRole: resumeValidation.detectedRole || 'Software Engineer',
+      experienceLevel: resumeValidation.experienceLevel || 'mid',
+      primarySkills: resumeValidation.primarySkills || ['JavaScript', 'React', 'Node.js'],
+      yearsOfExperience: resumeValidation.yearsOfExperience || 3,
+      resumeText,
+    });
+
+    const answers = questions.map((q) => ({
+      questionId: q.id,
+      question: q.question,
+      response: 'Sample answer for testing final evaluation.',
+    }));
+
+    const evaluation = await evaluateFinalInterviewWithGemini({
+      questions,
+      answers,
+      resumeText,
+      detectedRole: resumeValidation.detectedRole || 'Software Engineer',
+      experienceLevel: resumeValidation.experienceLevel || 'mid',
+      primarySkills: resumeValidation.primarySkills || ['JavaScript', 'React', 'Node.js'],
+      yearsOfExperience: resumeValidation.yearsOfExperience || 3,
+    });
 
     console.log('\n' + '='.repeat(60));
     console.log('\n✅ SUCCESS! Evaluation received:\n');
@@ -41,9 +65,10 @@ async function testGeminiIntegration() {
     console.log('  ✓ Technical Accuracy:', evaluation.technicalAccuracy, '/ 10');
     console.log('  ✓ Clarity:', evaluation.clarity, '/ 10');
     console.log('  ✓ Depth:', evaluation.depth, '/ 10');
+    console.log('  ✓ Problem Solving:', evaluation.problemSolving, '/ 10');
     console.log('  ✓ Strengths:', evaluation.strengths.length, 'points');
     console.log('  ✓ Weaknesses:', evaluation.weaknesses.length, 'points');
-    console.log('  ✓ Suggestions:', evaluation.improvementSuggestions.length, 'points');
+    console.log('  ✓ Improvements:', evaluation.improvements.length, 'points');
 
     console.log('\n✅ All tests passed! Gemini integration is working correctly.\n');
     return true;
