@@ -1,0 +1,237 @@
+You are a senior product architect and full-stack engineer.
+
+You are not writing random code.
+
+You are upgrading an existing AI-powered Technical Interview Platform into a fully integrated, placement-grade AI Interview Trainer.
+
+This document defines the product expectations.
+
+Follow it precisely.
+
+========================================================
+1. PRODUCT CONTEXT
+========================================================
+
+This is an AI-powered interview training platform.
+
+The backend is already upgraded with:
+
+- Resume intelligence extraction
+- Adaptive interview engine
+- Coding evaluation engine
+- Skill scoring engine
+- Skill gap reporting engine
+- Enhanced MongoDB schema
+- Interview type support (theoretical | coding | mixed)
+- Topic-level tracking
+- Difficulty-level tracking
+
+However:
+
+Frontend still renders a basic V1 UI and does not expose backend intelligence properly.
+
+Your task is to integrate and visualize backend intelligence without breaking architecture.
+
+No feature removal.
+No logic simplification.
+No architectural downgrade.
+
+========================================================
+2. PRODUCT VISION
+========================================================
+
+This platform must behave like:
+
+An intelligent adaptive interview trainer that:
+
+- Adjusts difficulty in real-time
+- Evaluates both conceptual and coding answers
+- Tracks skill growth over time
+- Identifies weaknesses
+- Generates improvement roadmap
+- Makes AI intelligence visible
+
+The user must FEEL the system thinking.
+
+========================================================
+3. CORE UX REQUIREMENTS
+========================================================
+
+3.1 Interview Results Page
+
+The page must:
+
+- Display interviewType badge clearly.
+- Show 3 distinct score blocks:
+
+  • Overall Score  
+  • Theoretical Score  
+  • Coding Score  
+
+- Render evaluation conditionally:
+
+  IF answer.isCodingAnswer = true:
+      Render Coding Metrics Panel:
+          - Logic Score
+          - Readability Score
+          - Edge Case Handling
+          - Time Complexity
+          - Space Complexity
+          - Improvement Suggestions
+
+  ELSE:
+      Render Theoretical Metrics Panel:
+          - Technical Accuracy
+          - Clarity
+          - Depth
+          - Strengths
+          - Weaknesses
+          - Improvements
+
+- Show topic and domain metadata per question.
+- Show difficulty badge per question.
+- Show difficulty progression indicator (if adaptive engine changed level).
+
+========================================================
+4. DASHBOARD INTELLIGENCE REQUIREMENTS
+========================================================
+
+Candidate Dashboard must show:
+
+- Total Interviews
+- Overall Average
+- Theoretical Average
+- Coding Average
+- Strongest Skill
+- Weakest Skill
+- Performance Trend (Line Chart)
+- Difficulty Breakdown (easy / medium / hard)
+
+Use backend-provided:
+
+- skillPerformance
+- difficultyBreakdown
+- theoreticalScore
+- codingScore
+- averageScore
+
+No mock data.
+
+========================================================
+5. RESUME INTELLIGENCE VISIBILITY
+========================================================
+
+Resume card must show extracted intelligence:
+
+- Primary Domain
+- Experience Years
+- Top Skills (limit 6)
+- Resume Validation Confidence (if available)
+
+Replace simple “READY” badge with structured resume summary.
+
+========================================================
+6. CODING MODE EXPERIENCE REQUIREMENTS
+========================================================
+
+When question type = coding:
+
+- Render Monaco Editor
+- Show language selector
+- Show auto-save indicator
+- Show remaining time
+- Show code template
+- Show Submit Code button
+
+Submission payload must include:
+
+{
+  questionIndex,
+  response,
+  isCodingAnswer: true,
+  language
+}
+
+Ensure UI clearly differentiates coding from theoretical mode.
+
+========================================================
+7. ADAPTIVE ENGINE TRANSPARENCY
+========================================================
+
+Make adaptive behavior visible:
+
+- Show difficulty level per question.
+- Indicate if difficulty increased or decreased.
+- Show “Targeting weak skill” indicator when applicable.
+- Display current difficulty state during interview.
+
+User must understand system adaptation.
+
+========================================================
+8. DATA CONTRACT ALIGNMENT
+========================================================
+
+Frontend must properly consume:
+
+- interviewType
+- theoreticalScore
+- codingScore
+- difficultyBreakdown
+- skillPerformance
+- finalEvaluation
+- topic metadata
+- domain metadata
+
+Update TypeScript interfaces accordingly.
+
+No unused backend intelligence.
+
+========================================================
+9. ARCHITECTURE CONSTRAINTS
+========================================================
+
+- No business logic inside React components.
+- All API calls centralized.
+- Use async/await.
+- Proper error boundaries.
+- Use loading skeletons.
+- Maintain clean separation:
+    /services
+    /components
+    /pages
+    /context
+
+========================================================
+10. NON-FUNCTIONAL REQUIREMENTS
+========================================================
+
+- Must remain modular.
+- Must not increase Gemini API calls.
+- Must not break adaptive engine.
+- Must not alter backend schema.
+- Must support future deployment scaling.
+
+========================================================
+EXPECTED OUTCOME
+========================================================
+
+After integration:
+
+- Backend intelligence is fully visible in UI.
+- Coding interviews feel distinct.
+- Adaptive behavior is visible.
+- Skill analytics are meaningful.
+- Resume intelligence is clear.
+- Platform appears production-grade.
+- System is strong enough to discuss in technical placements.
+
+Return:
+
+1. Required frontend refactor steps.
+2. Required API adjustments (if any).
+3. Updated interface structures.
+4. UI layout plan.
+5. Integration checklist.
+
+Do not return generic advice.
+Return implementation-level structured output.

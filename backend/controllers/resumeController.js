@@ -1,6 +1,7 @@
 const Resume = require('../models/Resume');
 const { extractTextFromPDF } = require('../services/pdfService');
 const geminiService = require('../services/geminiService');
+const resumeValidationService = require('../services/resumeValidationService');
 const logger = require('../utils/logger');
 
 /**
@@ -51,7 +52,22 @@ exports.uploadResume = async (req, res, next) => {
 
     // --- STAGE 2: AI VALIDATION + EXTRACTION ---
 
-    const structuredData = await geminiService.validateAndExtractResume(text);
+    let structuredData = null;
+    let aiValidated = false;
+
+    try {
+      // Try AI validation first
+      structuredData = await geminiService.validateAndExtractResume(text);
+      aiValidated = !!structuredData?.isResume;
+    } catch (error) {
+      logger.warn('AI Resume Validation failed, extracting metadata locally', { error: error.message });
+    }
+
+    // Fallback: Extract structured data locally if AI failed
+    if (!structuredData) {
+      structuredData = resumeValidationService.extractStructuredData(text);
+      logger.info('Resume structured data extracted using local validation service');
+    }
 
     const resumeData = {
       userId: req.user.id,
@@ -59,7 +75,7 @@ exports.uploadResume = async (req, res, next) => {
       fileName: req.file.originalname,
       extractedText: text,
       structuredData: structuredData || null,
-      aiValidated: !!structuredData?.isResume,
+      aiValidated: aiValidated,
       aiConfidence: structuredData?.confidence || 0
     };
 

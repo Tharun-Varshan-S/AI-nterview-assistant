@@ -5,6 +5,7 @@ import { Upload, FileText, Trash2, Play, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
 import Skeleton from '../components/Skeleton';
+import SkillAnalyticsDashboard from '../components/SkillAnalyticsDashboard';
 import { validateFile, formatFileSize } from '../utils/fileValidation';
 
 export default function CandidateDashboard() {
@@ -176,17 +177,99 @@ export default function CandidateDashboard() {
         </div>
 
         {resume ? (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-            <div className="flex items-start gap-3">
-              <FileText className="text-emerald-600 mt-1" size={24} />
-              <div className="flex-1">
-                <h3 className="font-medium text-slate-900">{resume.fileName}</h3>
-                <p className="text-sm text-slate-600 mt-1">
-                  Uploaded on {new Date(resume.createdAt).toLocaleDateString()}
-                </p>
+          <div className="space-y-4">
+            {/* Resume File Info */}
+            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
+              <div className="flex items-start gap-3">
+                <FileText className="text-emerald-600 mt-1" size={24} />
+                <div className="flex-1">
+                  <h3 className="font-medium text-slate-900">{resume.fileName}</h3>
+                  <p className="text-sm text-slate-600 mt-1">
+                    Uploaded on {new Date(resume.createdAt).toLocaleDateString()}
+                  </p>
+                </div>
+                {resume.aiValidated && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Validated</span>
+                    <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-1 rounded">
+                      {Math.round(resume.aiConfidence * 100)}% confidence
+                    </span>
+                  </div>
+                )}
               </div>
-              <span className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Ready</span>
             </div>
+
+            {/* Resume Intelligence */}
+            {resume.structuredData && (
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
+                <h4 className="text-sm font-semibold text-blue-900 mb-3">Resume Intelligence</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Primary Domain */}
+                  {resume.structuredData.primaryDomain && (
+                    <div>
+                      <p className="text-xs text-blue-600 font-medium mb-1">Primary Domain</p>
+                      <p className="text-sm text-blue-900 font-semibold">
+                        {resume.structuredData.primaryDomain}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Experience Years */}
+                  {resume.structuredData.experienceYears > 0 && (
+                    <div>
+                      <p className="text-xs text-blue-600 font-medium mb-1">Experience</p>
+                      <p className="text-sm text-blue-900 font-semibold">
+                        {resume.structuredData.experienceYears} {resume.structuredData.experienceYears === 1 ? 'year' : 'years'}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* Top Skills */}
+                  {resume.structuredData.skills && resume.structuredData.skills.length > 0 && (
+                    <div className="col-span-1 md:col-span-2">
+                      <p className="text-xs text-blue-600 font-medium mb-2">Top Skills</p>
+                      <div className="flex flex-wrap gap-2">
+                        {resume.structuredData.skills.slice(0, 8).map((skill, index) => (
+                          <span
+                            key={index}
+                            className="px-3 py-1 bg-white text-blue-700 text-xs rounded-full border border-blue-200 font-medium"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                        {resume.structuredData.skills.length > 8 && (
+                          <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
+                            +{resume.structuredData.skills.length - 8} more
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Technologies */}
+                  {resume.structuredData.technologies && resume.structuredData.technologies.length > 0 && (
+                    <div className="col-span-1 md:col-span-2">
+                      <p className="text-xs text-blue-600 font-medium mb-2">Technologies</p>
+                      <div className="flex flex-wrap gap-2">
+                        {resume.structuredData.technologies.slice(0, 6).map((tech, index) => (
+                          <span
+                            key={index}
+                            className="px-3 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full font-medium"
+                          >
+                            {tech}
+                          </span>
+                        ))}
+                        {resume.structuredData.technologies.length > 6 && (
+                          <span className="px-3 py-1 bg-indigo-200 text-indigo-800 text-xs rounded-full font-medium">
+                            +{resume.structuredData.technologies.length - 6} more
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <div className="border border-dashed border-slate-300 rounded-xl p-8 text-center bg-white/60">
@@ -246,6 +329,14 @@ export default function CandidateDashboard() {
           Start New Interview
         </button>
       </div>
+
+      {/* Performance Analytics */}
+      {interviews.filter((i) => i.status === 'completed').length > 0 && (
+        <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
+          <h2 className="text-xl font-semibold mb-4 text-slate-900">Performance Analytics</h2>
+          <SkillAnalyticsDashboard interviews={interviews} />
+        </div>
+      )}
 
       {/* Interview History */}
       <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">

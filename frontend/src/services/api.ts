@@ -107,39 +107,78 @@ export interface Resume {
 }
 
 export interface Question {
-  id: string;
   question: string;
   difficulty: 'easy' | 'medium' | 'hard';
+  topic?: string;
+  domain?: string;
+  timeLimit?: number;
+}
+
+export interface AIEvaluation {
+  score?: number;
+  technicalAccuracy?: string;
+  clarity?: string;
+  depth?: string;
+  strengths?: string[];
+  weaknesses?: string[];
+  improvements?: string[];
+  // Coding-specific fields
+  logicScore?: number;
+  readabilityScore?: number;
+  edgeCaseHandling?: string;
+  timeComplexity?: string;
+  spaceComplexity?: string;
+  improvementSuggestions?: string[];
+}
+
+export interface Answer {
+  questionIndex: number;
+  question: string;
+  response: string;
+  isCodingAnswer?: boolean;
+  language?: string;
+  aiEvaluation: AIEvaluation;
+  submittedAt?: string;
 }
 
 export interface FinalEvaluation {
   overallScore: number;
-  technicalAccuracy: number;
-  clarity: number;
-  depth: number;
-  problemSolving: number;
-  strengths: string[];
-  weaknesses: string[];
-  improvements: string[];
-  hiringRecommendation: 'strong-hire' | 'hire' | 'no-hire' | 'no-decision';
+  strengths?: string[];
+  weaknesses?: string[];
+  recommendations?: string[];
   evaluatedAt?: string;
 }
 
-export interface Answer {
-  questionId: string;
-  question: string;
-  response: string;
+export interface SkillPerformance {
+  topicName: string;
+  score: number;
+  timestamps: string[];
+}
+
+export interface DifficultyBreakdown {
+  easy?: { attempted: number; avgScore: number };
+  medium?: { attempted: number; avgScore: number };
+  hard?: { attempted: number; avgScore: number };
 }
 
 export interface Interview {
   _id: string;
   userId: string | User;
+  resumeId?: string;
+  interviewType?: 'theoretical' | 'coding' | 'mixed';
   status: 'in-progress' | 'completed';
+  currentDifficulty?: 'easy' | 'medium' | 'hard';
   questions: Question[];
+  questionsAsked?: Question[];
   answers: Answer[];
+  skillPerformance?: Map<string, SkillPerformance> | Record<string, SkillPerformance>;
+  difficultyBreakdown?: DifficultyBreakdown;
   finalEvaluation?: FinalEvaluation;
   totalScore: number;
   averageScore: number;
+  theoreticalScore?: number;
+  codingScore?: number;
+  systemDesignScore?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -183,14 +222,18 @@ export const resumeAPI = {
 
 // Interview API
 export const interviewAPI = {
-  create: async () => {
-    const { data } = await api.post<{ success: boolean; data: Interview }>('/interview/create');
+  create: async (interviewData?: { interviewType?: string; focusTopics?: string[] }) => {
+    const { data } = await api.post<{ success: boolean; data: Interview }>('/interview/create', interviewData || {});
     return data.data;
   },
 
   getMyInterviews: async () => {
-    const { data } = await api.get<{ success: boolean; data: Interview[] }>('/interview/my-interviews');
-    return data.data;
+    const { data } = await api.get<{
+      success: boolean;
+      data: { interviews: Interview[]; aggregatedMetrics?: any };
+    }>('/interview/my-interviews');
+    // Extract the interviews array from the new response structure
+    return Array.isArray(data.data) ? data.data : (data.data?.interviews || []);
   },
 
   getInterviewById: async (id: string) => {
@@ -198,18 +241,44 @@ export const interviewAPI = {
     return data.data;
   },
 
-  submitAnswer: async (interviewId: string, questionId: string, response: string) => {
-    const { data } = await api.post<{ success: boolean; data: { answer: Answer; interview: Interview } }>(
-      `/interview/${interviewId}/submit-answer`,
-      { questionId, response }
-    );
+  getInterviewDetails: async (id: string) => {
+    const { data } = await api.get<{
+      success: boolean;
+      data: { interview: Interview; metrics?: any; resume?: any; analytics?: any };
+    }>(`/interview/${id}/details`);
+    // Extract the interview object from the nested response
+    return data.data.interview || data.data;
+  },
+
+  submitAnswer: async (
+    interviewId: string,
+    answerData: {
+      questionIndex: number;
+      question: string;
+      response: string;
+      isCodingAnswer?: boolean;
+      language?: string;
+    }
+  ) => {
+    const { data } = await api.post<{
+      success: boolean;
+      data: { answer: any; interview: Interview; currentDifficulty?: string; sessionMetrics?: any };
+    }>(`/interview/${interviewId}/submit-answer`, answerData);
     return data.data;
   },
 
   completeInterview: async (interviewId: string) => {
-    const { data } = await api.put<{ success: boolean; data: Interview }>(
+    const { data } = await api.patch<{ success: boolean; data: Interview }>(
       `/interview/${interviewId}/complete`
     );
+    return data.data;
+  },
+
+  generateSkillGapReport: async () => {
+    const { data } = await api.post<{
+      success: boolean;
+      data: { report: any; skillSummary?: any; performanceMetrics?: any };
+    }>('/interview/skill-gap-report');
     return data.data;
   },
 };
@@ -217,13 +286,12 @@ export const interviewAPI = {
 // Recruiter API
 export const recruiterAPI = {
   getAllCompletedInterviews: async () => {
-    const { data } = await api.get<{ success: boolean; data: Interview[] }>('/interview/recruiter/all-completed');
+    const { data } = await api.get<{ success: boolean; data: Interview[] }>('/interview/recruiter/all');
     return data.data;
   },
 
   getInterviewWithDetails: async (id: string) => {
-    const { data } = await api.get<{ success: boolean; data: { interview: Interview; resume: Resume } }>(
-      `/interview/recruiter/${id}`
+    const { data } = await api.get<{ success: boolean; data: { interview: Interview; resume: Resume; analytics?: any } }>(    `/interview/${id}/details`
     );
     return data.data;
   },

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
 import CountdownTimer from '../components/CountdownTimer';
 import DifficultyBadge from '../components/DifficultyBadge';
+import CodingQuestionComponent from '../components/CodingQuestionComponent';
 import { interviewStateStorage } from '../utils/interviewStateStorage';
 import { Send, CheckCircle, AlertCircle } from 'lucide-react';
 
@@ -17,6 +18,8 @@ export default function InterviewSession() {
   const [loading, setLoading] = useState(true);
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answer, setAnswer] = useState('');
+  const [codingAnswer, setCodingAnswer] = useState('');
+  const [codingLanguage, setCodingLanguage] = useState('javascript');
   const [submitting, setSubmitting] = useState(false);
   const [timeKey, setTimeKey] = useState(0);
   const [wasRefreshed, setWasRefreshed] = useState(false);
@@ -37,8 +40,10 @@ export default function InterviewSession() {
       interviewStateStorage.saveState(id, {
         currentQuestionIndex,
         answers: interview.answers.map((a) => ({
-          questionId: a.questionId,
+          questionIndex: a.questionIndex,
           response: a.response,
+          isCodingAnswer: a.isCodingAnswer,
+          language: a.language,
         })),
       });
     }
@@ -93,11 +98,14 @@ export default function InterviewSession() {
     }
   };
 
-  const handleSubmitAnswer = async (autoSubmit = false) => {
+  const handleSubmitAnswer = async (
+    responsePayload: { response: string; isCodingAnswer?: boolean; language?: string },
+    autoSubmit = false
+  ) => {
     if (submitting) {
       return;
     }
-    if (!answer.trim() && !autoSubmit) {
+    if (!responsePayload.response.trim() && !autoSubmit) {
       toast.error('Please enter your answer');
       return;
     }
@@ -108,12 +116,18 @@ export default function InterviewSession() {
       setSubmitting(true);
       const { interview: updatedInterview } = await interviewAPI.submitAnswer(
         id!,
-        currentQuestion.id,
-        answer.trim() || '(No answer provided)'
+        {
+          questionIndex: currentQuestionIndex,
+          question: currentQuestion.question,
+          response: responsePayload.response.trim() || '(No answer provided)',
+          isCodingAnswer: responsePayload.isCodingAnswer,
+          language: responsePayload.language,
+        }
       );
 
       setInterview(updatedInterview);
       setAnswer('');
+      setCodingAnswer('');
 
       if (currentQuestionIndex + 1 < interview!.questions.length) {
         // Move to next question
@@ -142,7 +156,15 @@ export default function InterviewSession() {
 
   const handleTimeout = () => {
     if (interview?.status === 'in-progress' && !submitting) {
-      handleSubmitAnswer(true);
+      const isCoding = isCodingQuestion(interview.questions[currentQuestionIndex]);
+      handleSubmitAnswer(
+        {
+          response: isCoding ? codingAnswer : answer,
+          isCodingAnswer: isCoding,
+          language: isCoding ? codingLanguage : undefined,
+        },
+        true
+      );
     }
   };
 
@@ -157,7 +179,21 @@ export default function InterviewSession() {
   if (!interview) return null;
 
   const currentQuestion = interview.questions[currentQuestionIndex];
+  const isCoding = isCodingQuestion(currentQuestion);
   const progress = ((currentQuestionIndex) / interview.questions.length) * 100;
+  const questionTimeLimit = currentQuestion.timeLimit ?? QUESTION_TIME_LIMIT;
+
+  function isCodingQuestion(question: Interview['questions'][0]) {
+    const questionAny = question as { isCoding?: boolean; topic?: string; domain?: string; question?: string };
+    if (questionAny?.isCoding) return true;
+    if (interview?.interviewType === 'coding') return true;
+    if (interview?.interviewType === 'theoretical') return false;
+
+    const text = `${questionAny?.topic || ''} ${questionAny?.domain || ''} ${questionAny?.question || ''}`
+      .toLowerCase();
+    const codingKeywords = ['coding', 'programming', 'algorithm', 'data structure', 'implement', 'function', 'code'];
+    return codingKeywords.some((keyword) => text.includes(keyword));
+  }
 
   return (
     <div className="max-w-4xl mx-auto">
@@ -199,7 +235,7 @@ export default function InterviewSession() {
           </div>
           <CountdownTimer
             key={timeKey}
-            seconds={QUESTION_TIME_LIMIT}
+            seconds={questionTimeLimit}
             onTimeout={handleTimeout}
           />
         </div>
@@ -213,20 +249,40 @@ export default function InterviewSession() {
 
         {/* Answer Input */}
         <div className="mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Your Answer
-          </label>
-          <textarea
-            ref={textareaRef}
-            value={answer}
-            onChange={(e) => setAnswer(e.target.value)}
-            placeholder="Type your answer here..."
-            className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
-            disabled={submitting}
-          />
-          <p className="text-sm text-gray-500 mt-2">
-            {answer.length} characters | Be clear and concise
-          </p>
+          {isCoding ? (
+            <CodingQuestionComponent
+              question={currentQuestion.question}
+              questionIndex={currentQuestionIndex}
+              isSubmitting={submitting}
+              onCodeChange={(code, language) => {
+                setCodingAnswer(code);
+                setCodingLanguage(language);
+              }}
+              onSubmit={({ code, language }) =>
+                handleSubmitAnswer(
+                  { response: code, isCodingAnswer: true, language },
+                  false
+                )
+              }
+            />
+          ) : (
+            <>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Your Answer
+              </label>
+              <textarea
+                ref={textareaRef}
+                value={answer}
+                onChange={(e) => setAnswer(e.target.value)}
+                placeholder="Type your answer here..."
+                className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                disabled={submitting}
+              />
+              <p className="text-sm text-gray-500 mt-2">
+                {answer.length} characters | Be clear and concise
+              </p>
+            </>
+          )}
         </div>
 
         {submitting && (
@@ -241,28 +297,35 @@ export default function InterviewSession() {
           <p className="text-sm text-gray-600">
             {interview.questions.length - currentQuestionIndex - 1} questions remaining
           </p>
-          <button
-            onClick={() => handleSubmitAnswer(false)}
-            disabled={submitting || !answer.trim()}
-            className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
-          >
-            {submitting ? (
-              <>
-                <Spinner size="sm" />
-                Submitting...
-              </>
-            ) : currentQuestionIndex + 1 === interview.questions.length ? (
-              <>
-                <CheckCircle size={20} />
-                Complete Interview
-              </>
-            ) : (
-              <>
-                <Send size={20} />
-                Submit & Next
-              </>
-            )}
-          </button>
+          {!isCoding && (
+            <button
+              onClick={() =>
+                handleSubmitAnswer(
+                  { response: answer, isCodingAnswer: false },
+                  false
+                )
+              }
+              disabled={submitting || !answer.trim()}
+              className="bg-blue-600 text-white px-8 py-3 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2 font-medium"
+            >
+              {submitting ? (
+                <>
+                  <Spinner size="sm" />
+                  Submitting...
+                </>
+              ) : currentQuestionIndex + 1 === interview.questions.length ? (
+                <>
+                  <CheckCircle size={20} />
+                  Complete Interview
+                </>
+              ) : (
+                <>
+                  <Send size={20} />
+                  Submit & Next
+                </>
+              )}
+            </button>
+          )}
         </div>
       </div>
 
