@@ -1,5 +1,13 @@
 const axios = require('axios');
 const logger = require('../utils/logger');
+const {
+  resumePrompt,
+  questionPrompt,
+  evaluationPrompt,
+  codingPrompt,
+  ensureRequiredKeys,
+  buildPromptPayload
+} = require('./prompts');
 
 const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent';
 const DELAY_MS = 1500;
@@ -7,121 +15,145 @@ const RETRY_BACKOFF = [1500, 3000];
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const sanitizeJsonLikeText = (text) =>
+  text
+    .replace(/```json/gi, '')
+    .replace(/```/g, '')
+    .replace(/,\s*([}\]])/g, '$1')
+    .trim();
+
+const findBalancedJsonSnippet = (text) => {
+  const src = String(text || '');
+  const startCandidates = [];
+
+  for (let i = 0; i < src.length; i += 1) {
+    const ch = src[i];
+    if (ch === '{' || ch === '[') startCandidates.push(i);
+  }
+
+  const getClosing = (open) => (open === '{' ? '}' : ']');
+
+  for (const start of startCandidates) {
+    const open = src[start];
+    const close = getClosing(open);
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = start; i < src.length; i += 1) {
+      const ch = src[i];
+
+      if (inString) {
+        if (escaped) {
+          escaped = false;
+        } else if (ch === '\\') {
+          escaped = true;
+        } else if (ch === '"') {
+          inString = false;
+        }
+        continue;
+      }
+
+      if (ch === '"') {
+        inString = true;
+        continue;
+      }
+
+      if (ch === open) depth += 1;
+      if (ch === close) depth -= 1;
+
+      if (depth === 0) {
+        return src.slice(start, i + 1);
+      }
+    }
+  }
+
+  return null;
+};
+
 const extractJsonObject = (text) => {
-  const trimmed = String(text || '').trim();
+  const raw = String(text || '').trim();
+  if (!raw) return null;
 
-  if (!trimmed) return null;
+  const cleaned = sanitizeJsonLikeText(raw);
 
-  try {
-    return JSON.parse(trimmed);
-  } catch (_) {
-    // Continue with guarded extraction when model wraps JSON in extra text/fences.
+  const attempts = [cleaned, findBalancedJsonSnippet(cleaned), findBalancedJsonSnippet(raw)].filter(Boolean);
+
+  const objStart = cleaned.indexOf('{');
+  const objEnd = cleaned.lastIndexOf('}');
+  if (objStart !== -1 && objEnd !== -1 && objStart < objEnd) {
+    attempts.push(cleaned.slice(objStart, objEnd + 1));
   }
 
-  const start = trimmed.indexOf('{');
-  const end = trimmed.lastIndexOf('}');
-  if (start === -1 || end === -1 || start >= end) return null;
-
-  const candidate = trimmed.slice(start, end + 1);
-  try {
-    return JSON.parse(candidate);
-  } catch (_) {
-    return null;
+  const arrStart = cleaned.indexOf('[');
+  const arrEnd = cleaned.lastIndexOf(']');
+  if (arrStart !== -1 && arrEnd !== -1 && arrStart < arrEnd) {
+    attempts.push(cleaned.slice(arrStart, arrEnd + 1));
   }
+
+  for (const candidate of attempts) {
+    try {
+      return JSON.parse(candidate);
+    } catch (_) {
+      // try next
+    }
+  }
+
+  return null;
 };
 
-const getExperienceLevelFromYears = (years) => {
-  if (years <= 1) return 'junior';
-  if (years <= 4) return 'mid';
-  return 'senior';
-};
-
-const normalizeQuestionsPayload = (payload) => {
-  if (!payload || !Array.isArray(payload.questions)) return null;
-
-  const normalized = payload.questions.map((item) => ({
-    question: String(item?.question || '').trim(),
-    difficulty: String(item?.difficulty || '').toLowerCase(),
-    timeLimit: Number(item?.timeLimit),
-  }));
-
-  const expectedDifficultyOrder = ['easy', 'easy', 'medium', 'medium', 'hard', 'hard'];
-  const isValid =
-    normalized.length === 6 &&
-    normalized.every((q) =>
-      q.question &&
-      ['easy', 'medium', 'hard'].includes(q.difficulty) &&
-      Number.isFinite(q.timeLimit) &&
-      q.timeLimit > 0
-    ) &&
-    normalized.filter((q) => q.difficulty === 'easy').length === 2 &&
-    normalized.filter((q) => q.difficulty === 'medium').length === 2 &&
-    normalized.filter((q) => q.difficulty === 'hard').length === 2 &&
-    new Set(normalized.map((q) => q.question.toLowerCase())).size === 6;
-
-  if (!isValid) return null;
-
-  const orderByDifficulty = { easy: 0, medium: 1, hard: 2 };
-  normalized.sort((a, b) => orderByDifficulty[a.difficulty] - orderByDifficulty[b.difficulty]);
-  const corrected = normalized.map((q, idx) => ({
-    ...q,
-    difficulty: expectedDifficultyOrder[idx],
-    timeLimit: expectedDifficultyOrder[idx] === 'easy' ? 20 : expectedDifficultyOrder[idx] === 'medium' ? 40 : 60,
-  }));
-
-  return { questions: corrected };
-};
-
-/**
- * Core Gemini API Caller with Rate Limiting & Retry Logic
- */
 const callGemini = async (prompt, attempt = 0) => {
-  // Validate API key before calling
   if (!process.env.GEMINI_API_KEY) {
     logger.error('GEMINI_API_KEY environment variable not set');
     throw new Error('Gemini API key is not configured');
   }
 
-  // Pre-call delay to prevent burst (1.5s)
   await sleep(DELAY_MS);
 
   try {
+    const requestBody = {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: {
+        temperature: 0.2,
+        maxOutputTokens: 4096
+      }
+    };
+
     const response = await axios.post(
       GEMINI_API_ENDPOINT,
-      {
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 2048
-        },
-      },
+      requestBody,
       {
         params: { key: process.env.GEMINI_API_KEY },
-        timeout: 30000,
+        timeout: 30000
       }
     );
 
-    if (!response.data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+    const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!text) {
       throw new Error('Invalid Gemini response structure');
     }
 
-    const text = response.data.candidates[0].content.parts[0].text;
     const parsed = extractJsonObject(text);
     if (!parsed) {
-      throw new Error('Gemini response did not contain valid JSON');
+      logger.error('Gemini JSON parse failed', {
+        preview: String(text).slice(0, 250)
+      });
+      const parseError = new Error('Gemini response did not contain valid JSON');
+      parseError.isParseError = true;
+      throw parseError;
     }
+
     return parsed;
-
   } catch (error) {
-    const status = error.response?.status;
-    const isRateLimit = status === 429;
-    const errorMessage = error.message || 'Unknown error';
-    const errorData = error.response?.data || error.response?.statusText || 'No response data';
+    const status = error.response?.status || (error.isParseError ? 'PARSE' : undefined);
+    const isRetryable = status === 429 || status >= 500 || status === 'PARSE' || !status;
 
-    logger.error(`Gemini API Error [${status || 'NETWORK'}]: ${errorMessage}`, 
-      { status, data: errorData });
+    logger.error(`Gemini API Error [${status || 'NETWORK'}]: ${error.message || 'Unknown error'}`, {
+      status,
+      data: error.response?.data || error.response?.statusText || 'No response data'
+    });
 
-    if ((isRateLimit || (status >= 500) || !status) && attempt < RETRY_BACKOFF.length) {
+    if (isRetryable && attempt < RETRY_BACKOFF.length) {
       const waitTime = RETRY_BACKOFF[attempt];
       logger.warn(`Retrying Gemini call in ${waitTime}ms... (Attempt ${attempt + 1})`);
       await sleep(waitTime);
@@ -132,297 +164,204 @@ const callGemini = async (prompt, attempt = 0) => {
   }
 };
 
-/**
- * Stage 2: AI Validation + Structured Extraction
- */
+const callGeminiWithPromptControl = async ({ prompt, promptVersion, schema, fallback }) => {
+  try {
+    const result = await callGemini(prompt);
+    const requiredKeys = schema?.requiredKeys || [];
+    if (requiredKeys.length > 0 && !ensureRequiredKeys(result, requiredKeys)) {
+      logger.warn('Gemini schema mismatch, applying fallback', { promptVersion, requiredKeys });
+      return fallback;
+    }
+
+    if (result && typeof result === 'object') {
+      return { ...result, promptVersion };
+    }
+
+    return fallback;
+  } catch (error) {
+    logger.error('Gemini call failed with prompt control', { promptVersion, error: error.message });
+    return fallback;
+  }
+};
+
+const normalizeQuestion = (q = {}) => ({
+  question: String(q.question || '').trim(),
+  difficulty: String(q.difficulty || 'medium').toLowerCase(),
+  topic: String(q.topic || 'General').trim(),
+  domain: String(q.domain || 'General').trim(),
+  timeLimit: Number(q.timeLimit || 60),
+  isCoding: Boolean(q.isCoding),
+  testCases: Array.isArray(q.testCases)
+    ? q.testCases.slice(0, 5).map((tc) => ({
+      input: Array.isArray(tc?.input) ? tc.input : [tc?.input],
+      expectedOutput: tc?.expectedOutput,
+      description: String(tc?.description || 'Generated test case')
+    }))
+    : []
+});
+
+const normalizeQuestionsPayload = (payload) => {
+  if (!payload || !Array.isArray(payload.questions)) return null;
+
+  const normalized = payload.questions.map(normalizeQuestion);
+
+  const valid = normalized.length === 6 && normalized.every((q) =>
+    q.question && ['easy', 'medium', 'hard'].includes(q.difficulty) && Number.isFinite(q.timeLimit) && q.timeLimit > 0
+  );
+
+  if (!valid) return null;
+
+  return { questions: normalized };
+};
+
 exports.validateAndExtractResume = async (resumeText) => {
-  const prompt = `
-    You are a professional resume parser. Analyze the provided text.
-    Return STRICT JSON ONLY. No explanation.
-    
-    If it is NOT a resume (e.g., a recipe, a book, random text, or extremely sparse), set isResume=false.
-    
-    Response format:
-    {
-      "isResume": true,
-      "confidence": 0-100,
-      "skills": ["string"],
-      "technologies": ["string"],
-      "experienceYears": number,
-      "education": ["string"],
-      "primaryDomain": "string"
-    }
+  const payload = buildPromptPayload({
+    prompt: resumePrompt.buildResumePrompt(resumeText),
+    version: resumePrompt.version,
+    schema: resumePrompt.schema,
+    fallback: null
+  });
 
-    TEXT:
-    ${resumeText}
-  `;
+  const result = await callGeminiWithPromptControl({
+    prompt: payload.prompt,
+    promptVersion: payload.version,
+    schema: payload.schema,
+    fallback: payload.fallback
+  });
 
-  try {
-    const result = await callGemini(prompt);
-    // If structured data suggests it's not a resume, we return null to be handled by controller
-    if (result && !result.isResume) return null;
-    return result;
-  } catch (error) {
-    logger.warn('AI Resume Validation failed, falling back to basic metadata recovery');
-    return null; // Controller will handle null by storing raw text
-  }
+  if (result && !result.isResume) return null;
+  return result;
 };
 
-/**
- * Stage 3: Resume-Aware Question Generation
- */
 exports.generateInterviewQuestions = async (context) => {
-  const { structuredData, rawText } = context;
+  const payload = buildPromptPayload({
+    prompt: questionPrompt.buildQuestionPrompt(context),
+    version: questionPrompt.version,
+    schema: questionPrompt.schema,
+    fallback: null
+  });
 
-  // Logic to build context string
-  let domainContext = "";
-  if (structuredData) {
-    const skills = structuredData.skills?.join(', ') || 'General';
-    const technologies = structuredData.technologies?.join(', ') || 'N/A';
-    domainContext = `
-      Domain: ${structuredData.primaryDomain || 'General'}
-      Skills: ${skills}
-      Technologies: ${technologies}
-      Years of Exp: ${structuredData.experienceYears || 0}
-    `;
-  } else {
-    // Fallback domain mapping if structuredData is null
-    domainContext = `Context extracted from raw text: ${rawText.substring(0, 1000)}`;
-  }
+  const result = await callGeminiWithPromptControl({
+    prompt: payload.prompt,
+    promptVersion: payload.version,
+    schema: payload.schema,
+    fallback: payload.fallback
+  });
 
-  const candidateName = 'Candidate';
-  const candidateSkills = structuredData
-    ? [
-      ...(structuredData.skills || []),
-      ...(structuredData.technologies || []),
-    ].filter(Boolean)
-    : [];
-  const candidateSkillsText = candidateSkills.length
-    ? candidateSkills.join(', ')
-    : 'General software engineering';
-  const experienceYears = Number(structuredData?.experienceYears || 0);
-  const experienceLevel = getExperienceLevelFromYears(experienceYears);
-
-  const prompt = `You are a backend JSON API service for an AI Interview Assistant.
-
-Your job is to generate structured interview questions.
-
-STRICT OUTPUT RULES (MUST FOLLOW):
-
-1. Return ONLY valid raw JSON.
-2. Do NOT wrap the response in markdown.
-3. Do NOT use \`\`\`json or \`\`\` anywhere.
-4. Do NOT add explanations, comments, notes, or extra text.
-5. Do NOT say things like "Here is the JSON".
-6. The response must start with { and end with } exactly.
-7. Use double quotes for all keys and string values.
-8. Do NOT include trailing commas.
-9. The output must be directly parsable using JSON.parse().
-10. If you cannot follow the format, return an empty JSON object: {}.
-
-JSON STRUCTURE (MUST MATCH EXACTLY):
-
-{
-  "questions": [
-    {
-      "question": "string",
-      "difficulty": "easy | medium | hard",
-      "timeLimit": number
-    }
-  ]
-}
-
-INTERVIEW REQUIREMENTS:
-
-- Generate exactly 6 technical interview questions.
-- 2 EASY questions (timeLimit: 20)
-- 2 MEDIUM questions (timeLimit: 40)
-- 2 HARD questions (timeLimit: 60)
-- Questions must match the candidate's skills.
-- Do NOT repeat questions.
-- Keep questions clear and professional.
-- Questions should test real technical understanding.
-
-CANDIDATE INFORMATION:
-Name: ${candidateName}
-Skills: ${candidateSkillsText}
-Experience Level: ${experienceLevel}
-
-Additional Resume Context:
-${domainContext}
-
-Generate the questions now.`;
-
-  try {
-    const raw = await callGemini(prompt);
-    return normalizeQuestionsPayload(raw);
-  } catch (error) {
-    logger.error('Question generation failed');
-    return null;
-  }
+  if (!result) return null;
+  return normalizeQuestionsPayload(result);
 };
 
-/**
- * Stage 4: Answer Evaluation
- */
-exports.evaluateAnswer = async (question, answer) => {
-  const prompt = `
-    Evaluate the technical interview answer. 
-    Question: ${question}
-    Answer: ${answer}
-
-    Return STRICT JSON ONLY:
-    {
-      "score": 0-10,
-      "technicalAccuracy": "string",
-      "clarity": "string",
-      "depth": "string",
-      "strengths": ["string"],
-      "weaknesses": ["string"],
-      "improvements": ["string"]
-    }
-  `;
-
-  try {
-    return await callGemini(prompt);
-  } catch (error) {
-    logger.error('Answer evaluation failed');
-    return null;
-  }
-};
-
-/**
- * Enhanced: Question Generation with Metadata (topic, domain, difficulty)
- */
 exports.generateInterviewQuestionsWithMetadata = async (context) => {
-  const { structuredData, rawText, focusTopics = [] } = context;
+  return exports.generateInterviewQuestions(context);
+};
 
-  let domainContext = "";
-  if (structuredData) {
-    const skills = structuredData.skills?.join(', ') || 'General';
-    const technologies = structuredData.technologies?.join(', ') || 'N/A';
-    domainContext = `
-      Domain: ${structuredData.primaryDomain || 'General'}
-      Skills: ${skills}
-      Technologies: ${technologies}
-      Years of Exp: ${structuredData.experienceYears || 0}
-    `;
-  } else {
-    domainContext = `Context extracted from raw text: ${rawText.substring(0, 1000)}`;
-  }
-
-  const focusTopicsText = focusTopics.length > 0 ? `Prioritize these topics: ${focusTopics.join(', ')}.` : '';
-
-  const prompt = `You are an AI Interview System. Generate adaptive interview questions with detailed metadata.
-
-STRICT OUTPUT RULES:
-1. Return ONLY valid JSON without markdown or explanation.
-2. Must be directly parsable.
-3. All strings use double quotes.
-
-JSON STRUCTURE:
-{
-  "questions": [
-    {
-      "question": "string",
-      "difficulty": "easy|medium|hard",
-      "topic": "string (specific skill area)",
-      "domain": "string (Frontend/Backend/DevOps/etc)",
-      "timeLimit": number
+exports.evaluateAnswer = async (question, answer) => {
+  const payload = buildPromptPayload({
+    prompt: evaluationPrompt.buildAnswerEvaluationPrompt({ question, answer }),
+    version: evaluationPrompt.version,
+    schema: evaluationPrompt.schema,
+    fallback: {
+      score: 5,
+      technicalAccuracy: 'Not evaluated',
+      clarity: 'Not evaluated',
+      depth: 'Not evaluated',
+      strengths: ['Response provided'],
+      weaknesses: ['Evaluation pending'],
+      improvements: ['Retry evaluation'],
+      genericFlags: [],
+      promptVersion: evaluationPrompt.version
     }
-  ]
-}
+  });
 
-REQUIREMENTS:
-- Generate exactly 6 questions.
-- 2 EASY (topic: different), 2 MEDIUM (topic: different), 2 HARD (topic: different).
-- Each question must have unique topic.
-- For each question, specify domain (Frontend, Backend, DevOps, Database, Architecture, etc).
-- Match candidate skills: ${structuredData?.skills?.join(', ') || 'General'}
-- ${focusTopicsText}
-
-CANDIDATE INFO:
-${domainContext}
-
-Generate now.`;
-
-  try {
-    const result = await callGemini(prompt);
-    if (!result?.questions || result.questions.length !== 6) return null;
-    return result;
-  } catch (error) {
-    logger.error('Enhanced question generation failed');
-    return null;
-  }
+  return callGeminiWithPromptControl({
+    prompt: payload.prompt,
+    promptVersion: payload.version,
+    schema: payload.schema,
+    fallback: payload.fallback
+  });
 };
 
-/**
- * Evaluate Code Submission
- */
 exports.evaluateCodeSubmission = async (question, code, language) => {
-  const prompt = `You are a code reviewer for an interview platform. Evaluate this code solution.
+  const payload = buildPromptPayload({
+    prompt: codingPrompt.buildCodingEvaluationPrompt({ question, code, language }),
+    version: codingPrompt.version,
+    schema: codingPrompt.schema,
+    fallback: {
+      logicScore: 5,
+      readabilityScore: 5,
+      edgeCaseHandling: 'Not evaluated',
+      timeComplexity: 'Not evaluated',
+      spaceComplexity: 'Not evaluated',
+      improvementSuggestions: ['Retry evaluation'],
+      genericFlags: [],
+      promptVersion: codingPrompt.version
+    }
+  });
 
-Question: ${question}
-Language: ${language}
-Code:
-\`\`\`${language}
-${code}
-\`\`\`
-
-Return STRICT JSON ONLY:
-{
-  "logicScore": 0-10,
-  "readabilityScore": 0-10,
-  "edgeCaseHandling": "string",
-  "timeComplexity": "string (e.g., O(n))",
-  "spaceComplexity": "string (e.g., O(1))",
-  "improvementSuggestions": ["string"]
-}`;
-
-  try {
-    return await callGemini(prompt);
-  } catch (error) {
-    logger.error('Code evaluation failed');
-    return null;
-  }
+  return callGeminiWithPromptControl({
+    prompt: payload.prompt,
+    promptVersion: payload.version,
+    schema: payload.schema,
+    fallback: payload.fallback
+  });
 };
 
-/**
- * Generate Skill Gap Report
- * Called after 3+ interviews to create personalized roadmap
- */
+exports.generateExecutionTestCases = async (question, language = 'javascript') => {
+  const payload = buildPromptPayload({
+    prompt: codingPrompt.buildTestCaseGenerationPrompt({ question, language }),
+    version: codingPrompt.version,
+    schema: { requiredKeys: ['testCases'] },
+    fallback: { testCases: [] }
+  });
+
+  const result = await callGeminiWithPromptControl({
+    prompt: payload.prompt,
+    promptVersion: payload.version,
+    schema: payload.schema,
+    fallback: payload.fallback
+  });
+
+  return Array.isArray(result?.testCases) ? result.testCases : [];
+};
+
+exports.simulateCodeExecution = async (question, code, language, testCases = []) => {
+  const payload = buildPromptPayload({
+    prompt: codingPrompt.buildExecutionSimulationPrompt({ question, code, language, testCases }),
+    version: codingPrompt.version,
+    schema: {
+      requiredKeys: ['testCasesPassed', 'totalTestCases', 'runtimeError', 'executionTimeMs', 'executionScore']
+    },
+    fallback: {
+      testCasesPassed: 0,
+      totalTestCases: testCases.length || 0,
+      runtimeError: 'Execution simulation unavailable',
+      executionTimeMs: 0,
+      executionScore: 0,
+      promptVersion: codingPrompt.version
+    }
+  });
+
+  return callGeminiWithPromptControl({
+    prompt: payload.prompt,
+    promptVersion: payload.version,
+    schema: payload.schema,
+    fallback: payload.fallback
+  });
+};
+
 exports.generateSkillGapReport = async (userSkillSummary) => {
-  const {
-    strongestSkills = [],
-    weakestSkills = [],
-    allTopicsAttempted = [],
-    averageScore = 0,
-    interviewCount = 0
-  } = userSkillSummary;
+  const payload = buildPromptPayload({
+    prompt: evaluationPrompt.buildSkillGapReportPrompt(userSkillSummary),
+    version: evaluationPrompt.version,
+    schema: { requiredKeys: ['strongestSkills', 'weakestSkills', 'recommendedFocusAreas', 'learningSuggestions', 'estimatedRoadmapWeeks', 'summary'] },
+    fallback: null
+  });
 
-  const prompt = `You are a career development advisor. Based on interview performance, generate a personalized skill gap report.
-
-PERFORMANCE DATA:
-- Interviews Completed: ${interviewCount}
-- Average Score: ${averageScore}/10
-- Strongest Skills: ${strongestSkills.join(', ') || 'None identified'}
-- Weakest Skills: ${weakestSkills.join(', ') || 'None identified'}
-- Topics Attempted: ${allTopicsAttempted.join(', ') || 'General'}
-
-Return STRICT JSON ONLY:
-{
-  "strongestSkills": ["string"],
-  "weakestSkills": ["string"],
-  "recommendedFocusAreas": ["string"],
-  "learningSuggestions": ["string"],
-  "estimatedRoadmapWeeks": number,
-  "summary": "string"
-}`;
-
-  try {
-    return await callGemini(prompt);
-  } catch (error) {
-    logger.error('Skill gap report generation failed');
-    return null;
-  }
+  return callGeminiWithPromptControl({
+    prompt: payload.prompt,
+    promptVersion: payload.version,
+    schema: payload.schema,
+    fallback: payload.fallback
+  });
 };

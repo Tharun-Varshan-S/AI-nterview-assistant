@@ -26,6 +26,10 @@ export default function InterviewSession() {
   const [difficultyChange, setDifficultyChange] = useState<'increased' | 'decreased' | null>(null);
   const [sessionMetrics, setSessionMetrics] = useState<SessionMetrics | null>(null);
   const [targetWeakTopic, setTargetWeakTopic] = useState<string | null>(null);
+  const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
+  const [firstTypingTime, setFirstTypingTime] = useState<number | null>(null);
+  const [nonCodingEditCount, setNonCodingEditCount] = useState(0);
+  const [codingMetrics, setCodingMetrics] = useState({ editCount: 0, typingDurationMs: 0 });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -35,6 +39,10 @@ export default function InterviewSession() {
   useEffect(() => {
     // Focus on textarea when question changes
     textareaRef.current?.focus();
+    setQuestionStartTime(Date.now());
+    setFirstTypingTime(null);
+    setNonCodingEditCount(0);
+    setCodingMetrics({ editCount: 0, typingDurationMs: 0 });
   }, [currentQuestionIndex]);
 
   // Save state after each question submission
@@ -126,6 +134,14 @@ export default function InterviewSession() {
           response: responsePayload.response.trim() || '(No answer provided)',
           isCodingAnswer: responsePayload.isCodingAnswer,
           language: responsePayload.language,
+          interactionMetrics: {
+            timeSpentSec: Math.max(0, Math.round((Date.now() - questionStartTime) / 1000)),
+            typingDurationMs: responsePayload.isCodingAnswer
+              ? codingMetrics.typingDurationMs
+              : (firstTypingTime ? Date.now() - firstTypingTime : 0),
+            editCount: responsePayload.isCodingAnswer ? codingMetrics.editCount : nonCodingEditCount,
+            autoSubmitted: autoSubmit,
+          },
         }
       );
 
@@ -315,6 +331,9 @@ export default function InterviewSession() {
                 setCodingAnswer(code);
                 setCodingLanguage(language);
               }}
+              onMetricsChange={({ editCount, typingDurationMs }) => {
+                setCodingMetrics({ editCount, typingDurationMs });
+              }}
               onSubmit={({ code, language }: { code: string; language: string }) =>
                 handleSubmitAnswer(
                   { response: code, isCodingAnswer: true, language },
@@ -330,13 +349,19 @@ export default function InterviewSession() {
               <textarea
                 ref={textareaRef}
                 value={answer}
-                onChange={(e) => setAnswer(e.target.value)}
+                onChange={(e) => {
+                  if (firstTypingTime === null) {
+                    setFirstTypingTime(Date.now());
+                  }
+                  setNonCodingEditCount((prev) => prev + 1);
+                  setAnswer(e.target.value);
+                }}
                 placeholder="Type your answer here..."
                 className="w-full h-48 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
                 disabled={submitting}
               />
               <p className="text-sm text-gray-500 mt-2">
-                {answer.length} characters | Be clear and concise
+                {answer.length} characters | {nonCodingEditCount} edits | Be clear and concise
               </p>
             </>
           )}

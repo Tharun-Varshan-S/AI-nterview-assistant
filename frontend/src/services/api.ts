@@ -128,10 +128,28 @@ export interface AIEvaluation {
   // Coding-specific fields
   logicScore?: number;
   readabilityScore?: number;
+  executionScore?: number;
+  finalCodingScore?: number;
   edgeCaseHandling?: string;
   timeComplexity?: string;
   spaceComplexity?: string;
   improvementSuggestions?: string[];
+  promptVersion?: string;
+}
+
+export interface ExecutionResult {
+  testCasesPassed: number;
+  totalTestCases: number;
+  runtimeError?: string | null;
+  executionTimeMs: number;
+  executionScore: number;
+}
+
+export interface InteractionMetrics {
+  timeSpentSec?: number;
+  typingDurationMs?: number;
+  editCount?: number;
+  autoSubmitted?: boolean;
 }
 
 export interface Answer {
@@ -141,6 +159,13 @@ export interface Answer {
   response: string;
   isCodingAnswer?: boolean;
   language?: string;
+  promptVersion?: string;
+  responseLength?: number;
+  aiConfidenceScore?: number;
+  evaluationReliability?: number;
+  evaluationTimestamp?: string;
+  executionResult?: ExecutionResult;
+  interactionMetrics?: InteractionMetrics;
   aiEvaluation: AIEvaluation;
   submittedAt?: string;
 }
@@ -156,7 +181,34 @@ export interface FinalEvaluation {
   improvements?: string[];
   hiringRecommendation?: string;
   recommendations?: string[];
+  resumeConsistency?: ResumeConsistencyReport;
+  skillTrajectory?: SkillTrajectoryEntry[];
   evaluatedAt?: string;
+}
+
+export interface ResumeConsistencyReport {
+  resumeClaimAccuracy: number;
+  inflatedSkills: string[];
+  verifiedStrengths: string[];
+  underutilizedSkills: string[];
+}
+
+export interface SkillTrajectoryEntry {
+  topic: string;
+  currentLevel: string;
+  growthRate: number;
+  plateauDetected: boolean;
+  improvementTrend: 'Upward' | 'Stable' | 'Declining';
+  rollingAverage?: number;
+}
+
+export interface AdaptiveHistoryEvent {
+  questionIndex: number;
+  previousScore: number;
+  previousDifficulty: 'easy' | 'medium' | 'hard';
+  newDifficulty: 'easy' | 'medium' | 'hard';
+  reason: string;
+  timestamp: string;
 }
 
 export interface SkillPerformance {
@@ -183,6 +235,13 @@ export interface Interview {
   answers: Answer[];
   skillPerformance?: Map<string, SkillPerformance> | Record<string, SkillPerformance>;
   difficultyBreakdown?: DifficultyBreakdown;
+  adaptiveHistory?: AdaptiveHistoryEvent[];
+  sessionMetrics?: {
+    averageResponseTime: number;
+    averageEditCount: number;
+    timeoutCount: number;
+    fastResponseFlag: boolean;
+  };
   finalEvaluation?: FinalEvaluation;
   totalScore: number;
   averageScore: number;
@@ -215,6 +274,7 @@ export interface SubmitAnswerResponse {
   interview: Interview;
   currentDifficulty?: 'easy' | 'medium' | 'hard';
   sessionMetrics?: SessionMetrics;
+  adaptiveEvent?: AdaptiveHistoryEvent;
 }
 
 // Auth API
@@ -292,6 +352,7 @@ export const interviewAPI = {
       response: string;
       isCodingAnswer?: boolean;
       language?: string;
+      interactionMetrics?: InteractionMetrics;
     }
   ) => {
     const { data } = await api.post<{
@@ -313,6 +374,16 @@ export const interviewAPI = {
       success: boolean;
       data: { report: any; skillSummary?: any; performanceMetrics?: any };
     }>('/interview/skill-gap-report');
+    return data.data;
+  },
+
+  getConsistency: async (id: string) => {
+    const { data } = await api.get<{ success: boolean; data: ResumeConsistencyReport }>(`/interview/${id}/consistency`);
+    return data.data;
+  },
+
+  getAdaptiveHistory: async (id: string) => {
+    const { data } = await api.get<{ success: boolean; data: AdaptiveHistoryEvent[] }>(`/interview/${id}/adaptive-history`);
     return data.data;
   },
 };

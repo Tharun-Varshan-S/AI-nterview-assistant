@@ -24,6 +24,7 @@ interface CodingQuestionComponentProps {
   questionIndex: number;
   onSubmit: (payload: CodingSubmitPayload) => void;
   onCodeChange?: (code: string, language: SupportedLanguage) => void;
+  onMetricsChange?: (metrics: { editCount: number; typingDurationMs: number }) => void;
   isSubmitting?: boolean;
 }
 
@@ -32,12 +33,15 @@ const CodingQuestionComponent = ({
   questionIndex,
   onSubmit,
   onCodeChange,
+  onMetricsChange,
   isSubmitting = false
 }: CodingQuestionComponentProps) => {
   const [code, setCode] = useState('');
   const [language, setLanguage] = useState<SupportedLanguage>('javascript');
   const [showOutput, setShowOutput] = useState(false);
   const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [editCount, setEditCount] = useState(0);
+  const [typingStartedAt, setTypingStartedAt] = useState<number | null>(null);
 
   // Language templates
   const templates: Record<SupportedLanguage, string> = {
@@ -81,10 +85,13 @@ int main() {
   useEffect(() => {
     const nextCode = templates[language] || templates.javascript;
     setCode(nextCode);
+    setEditCount(0);
+    setTypingStartedAt(null);
+    onMetricsChange?.({ editCount: 0, typingDurationMs: 0 });
     if (onCodeChange) {
       onCodeChange(nextCode, language);
     }
-  }, [language, onCodeChange]);
+  }, [language, onCodeChange, onMetricsChange]);
 
   // Auto-save to local storage
   useEffect(() => {
@@ -162,7 +169,15 @@ int main() {
           value={code}
           onChange={(value) => {
             const nextCode = value || '';
+            const now = Date.now();
+            if (typingStartedAt === null) {
+              setTypingStartedAt(now);
+            }
+            const nextEditCount = editCount + 1;
+            setEditCount(nextEditCount);
             setCode(nextCode);
+            const typingDurationMs = (typingStartedAt ?? now) ? now - (typingStartedAt ?? now) : 0;
+            onMetricsChange?.({ editCount: nextEditCount, typingDurationMs });
             if (onCodeChange) {
               onCodeChange(nextCode, language);
             }

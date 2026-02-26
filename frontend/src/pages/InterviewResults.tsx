@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { interviewAPI, Interview } from '../services/api';
+import { interviewAPI, Interview, ResumeConsistencyReport, AdaptiveHistoryEvent } from '../services/api';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
 import DifficultyBadge from '../components/DifficultyBadge';
@@ -59,6 +59,8 @@ export default function InterviewResults() {
   const [interview, setInterview] = useState<Interview | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [consistency, setConsistency] = useState<ResumeConsistencyReport | null>(null);
+  const [adaptiveHistory, setAdaptiveHistory] = useState<AdaptiveHistoryEvent[]>([]);
 
   useEffect(() => {
     loadResults();
@@ -69,6 +71,10 @@ export default function InterviewResults() {
       setLoading(true);
       setError(null);
       const data = await interviewAPI.getInterviewById(id!);
+      const [consistencyData, historyData] = await Promise.all([
+        interviewAPI.getConsistency(id!).catch(() => null),
+        interviewAPI.getAdaptiveHistory(id!).catch(() => []),
+      ]);
       
       if (data.status !== 'completed') {
         setError('Interview is not completed yet');
@@ -76,6 +82,8 @@ export default function InterviewResults() {
       }
       
       setInterview(data);
+      setConsistency(consistencyData);
+      setAdaptiveHistory(historyData || []);
     } catch (err: any) {
       const errorMsg = err.response?.data?.message || 'Failed to load results';
       setError(errorMsg);
@@ -125,6 +133,8 @@ export default function InterviewResults() {
   };
 
   const finalEvaluation = interview.finalEvaluation;
+  const consistencyReport = consistency || finalEvaluation?.resumeConsistency;
+  const trajectory = finalEvaluation?.skillTrajectory || [];
   const overallScore = interview.averageScore || 0;
   const skillPerformanceRecord =
     interview.skillPerformance instanceof Map
@@ -211,6 +221,59 @@ export default function InterviewResults() {
           />
         </div>
       </div>
+
+      {/* Intelligence Panels */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
+          <h2 className="text-xl font-semibold mb-4">Resume Consistency Report</h2>
+          {consistencyReport ? (
+            <div className="space-y-3 text-sm text-slate-700">
+              <p>
+                Resume Claim Accuracy: <span className="font-semibold">{consistencyReport.resumeClaimAccuracy}%</span>
+              </p>
+              <p>Verified Strengths: {(consistencyReport.verifiedStrengths || []).join(', ') || 'None'}</p>
+              <p>Inflated Skills: {(consistencyReport.inflatedSkills || []).join(', ') || 'None'}</p>
+              <p>Underutilized Skills: {(consistencyReport.underutilizedSkills || []).join(', ') || 'None'}</p>
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">Consistency data unavailable for this session.</p>
+          )}
+        </div>
+
+        <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
+          <h2 className="text-xl font-semibold mb-4">Skill Trajectory</h2>
+          {trajectory.length > 0 ? (
+            <div className="space-y-3">
+              {trajectory.slice(0, 5).map((entry, idx) => (
+                <div key={`${entry.topic}-${idx}`} className="rounded-lg border border-slate-200 p-3">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="font-medium text-slate-900">{entry.topic}</span>
+                    <span className="text-slate-600">{entry.currentLevel}</span>
+                  </div>
+                  <div className="mt-2 text-xs text-slate-600">
+                    Growth: {entry.growthRate} | Trend: {entry.improvementTrend} {entry.plateauDetected ? '| Plateau detected' : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">Complete more interviews to build trajectory analytics.</p>
+          )}
+        </div>
+      </div>
+
+      {adaptiveHistory.length > 0 && (
+        <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
+          <h2 className="text-xl font-semibold mb-4">Difficulty Evolution Timeline</h2>
+          <div className="space-y-2">
+            {adaptiveHistory.map((event, idx) => (
+              <div key={`${event.questionIndex}-${idx}`} className="text-sm text-slate-700 rounded-lg border border-slate-200 p-3">
+                Q{event.questionIndex + 1}: {event.previousDifficulty} → {event.newDifficulty} (score {event.previousScore?.toFixed?.(1) || event.previousScore}) | {event.reason}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Final Evaluation Summary */}
       {finalEvaluation && (
@@ -353,6 +416,38 @@ export default function InterviewResults() {
                           <Code2 size={16} />
                           Coding Evaluation
                         </h4>
+                        {answer.executionResult && (
+                          <div className="mb-3 grid grid-cols-2 md:grid-cols-4 gap-3 rounded-lg border border-purple-200 bg-white p-3">
+                            <div>
+                              <p className="text-xs text-purple-600 font-medium">Execution</p>
+                              <p className="text-lg font-bold text-purple-900">{answer.executionResult.executionScore}/10</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-purple-600 font-medium">Tests Passed</p>
+                              <p className="text-sm text-purple-900">{answer.executionResult.testCasesPassed}/{answer.executionResult.totalTestCases}</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-purple-600 font-medium">Exec Time</p>
+                              <p className="text-sm text-purple-900">{answer.executionResult.executionTimeMs}ms</p>
+                            </div>
+                            <div>
+                              <p className="text-xs text-purple-600 font-medium">Runtime Error</p>
+                              <p className="text-xs text-purple-900">{answer.executionResult.runtimeError || 'None'}</p>
+                            </div>
+                          </div>
+                        )}
+                        <div className="mb-3">
+                          <div className="flex items-center justify-between text-xs text-purple-700 mb-1">
+                            <span>Evaluation Confidence</span>
+                            <span>{answer.aiConfidenceScore ?? 0}%</span>
+                          </div>
+                          <div className="h-2 rounded-full bg-purple-100">
+                            <div
+                              className="h-2 rounded-full bg-purple-500"
+                              style={{ width: `${Math.min(100, answer.aiConfidenceScore || 0)}%` }}
+                            />
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
                           <div>
                             <p className="text-xs text-purple-600 font-medium">Logic Score</p>
@@ -364,6 +459,12 @@ export default function InterviewResults() {
                             <p className="text-xs text-purple-600 font-medium">Readability</p>
                             <p className="text-lg font-bold text-purple-900">
                               {answer.aiEvaluation.readabilityScore?.toFixed(1) || '—'}/10
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-purple-600 font-medium">Final Coding Score</p>
+                            <p className="text-lg font-bold text-purple-900">
+                              {answer.aiEvaluation.finalCodingScore?.toFixed(1) || '—'}/10
                             </p>
                           </div>
                           <div>
@@ -406,6 +507,17 @@ export default function InterviewResults() {
                           <FileText size={16} />
                           Theoretical Evaluation
                         </h4>
+                        <div className="mb-3 text-xs text-blue-700">
+                          Confidence: {answer.aiConfidenceScore ?? '—'}% | Reliability: {answer.evaluationReliability ?? '—'} | Prompt: {answer.promptVersion || '—'}
+                        </div>
+                        <div className="mb-3">
+                          <div className="h-2 rounded-full bg-blue-100">
+                            <div
+                              className="h-2 rounded-full bg-blue-500"
+                              style={{ width: `${Math.min(100, answer.aiConfidenceScore || 0)}%` }}
+                            />
+                          </div>
+                        </div>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
                           <div>
                             <p className="text-xs text-blue-600 font-medium">Score</p>

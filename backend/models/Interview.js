@@ -34,6 +34,14 @@ const interviewSchema = new mongoose.Schema(
         topic: String,
         domain: String,
         timeLimit: Number,
+        isCoding: Boolean,
+        testCases: [
+          {
+            input: [mongoose.Schema.Types.Mixed],
+            expectedOutput: mongoose.Schema.Types.Mixed,
+            description: String
+          }
+        ],
         questionIndex: Number,
       },
     ],
@@ -43,7 +51,15 @@ const interviewSchema = new mongoose.Schema(
         difficulty: String,
         topic: String,
         domain: String,
-        timeLimit: Number
+        timeLimit: Number,
+        isCoding: Boolean,
+        testCases: [
+          {
+            input: [mongoose.Schema.Types.Mixed],
+            expectedOutput: mongoose.Schema.Types.Mixed,
+            description: String
+          }
+        ]
       },
     ],
     answers: [
@@ -53,6 +69,24 @@ const interviewSchema = new mongoose.Schema(
         response: String,
         isCodingAnswer: Boolean,
         language: String,
+        promptVersion: String,
+        responseLength: Number,
+        aiConfidenceScore: Number,
+        evaluationReliability: Number,
+        evaluationTimestamp: Date,
+        executionResult: {
+          testCasesPassed: Number,
+          totalTestCases: Number,
+          runtimeError: String,
+          executionTimeMs: Number,
+          executionScore: Number
+        },
+        interactionMetrics: {
+          timeSpentSec: Number,
+          typingDurationMs: Number,
+          editCount: Number,
+          autoSubmitted: Boolean
+        },
         aiEvaluation: {
           score: Number,
           technicalAccuracy: String,
@@ -64,6 +98,8 @@ const interviewSchema = new mongoose.Schema(
           // Coding-specific fields
           logicScore: Number,
           readabilityScore: Number,
+          executionScore: Number,
+          finalCodingScore: Number,
           edgeCaseHandling: String,
           timeComplexity: String,
           spaceComplexity: String
@@ -110,7 +146,39 @@ const interviewSchema = new mongoose.Schema(
       strengths: [String],
       weaknesses: [String],
       recommendations: [String],
+      resumeConsistency: {
+        resumeClaimAccuracy: Number,
+        inflatedSkills: [String],
+        verifiedStrengths: [String],
+        underutilizedSkills: [String]
+      },
+      skillTrajectory: [
+        {
+          topic: String,
+          currentLevel: String,
+          growthRate: Number,
+          plateauDetected: Boolean,
+          improvementTrend: String,
+          rollingAverage: Number
+        }
+      ],
       evaluatedAt: Date
+    },
+    adaptiveHistory: [
+      {
+        questionIndex: Number,
+        previousScore: Number,
+        previousDifficulty: String,
+        newDifficulty: String,
+        reason: String,
+        timestamp: Date
+      }
+    ],
+    sessionMetrics: {
+      averageResponseTime: { type: Number, default: 0 },
+      averageEditCount: { type: Number, default: 0 },
+      timeoutCount: { type: Number, default: 0 },
+      fastResponseFlag: { type: Boolean, default: false }
     },
     createdAt: {
       type: Date,
