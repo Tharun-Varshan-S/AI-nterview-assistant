@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { resumeAPI, interviewAPI, Interview } from '../services/api';
+import { resumeAPI, interviewAPI, Interview, Resume } from '../services/api';
 import { Upload, FileText, Trash2, Play, AlertCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
@@ -9,7 +9,7 @@ import SkillAnalyticsDashboard from '../components/SkillAnalyticsDashboard';
 import { validateFile, formatFileSize } from '../utils/fileValidation';
 
 export default function CandidateDashboard() {
-  const [resume, setResume] = useState<any>(null);
+  const [resume, setResume] = useState<Resume | null>(null);
   const [interviews, setInterviews] = useState<Interview[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -229,7 +229,7 @@ export default function CandidateDashboard() {
                     <div className="col-span-1 md:col-span-2">
                       <p className="text-xs text-blue-600 font-medium mb-2">Top Skills</p>
                       <div className="flex flex-wrap gap-2">
-                        {resume.structuredData.skills.slice(0, 8).map((skill, index) => (
+                        {resume.structuredData.skills.slice(0, 6).map((skill: string, index: number) => (
                           <span
                             key={index}
                             className="px-3 py-1 bg-white text-blue-700 text-xs rounded-full border border-blue-200 font-medium"
@@ -237,9 +237,9 @@ export default function CandidateDashboard() {
                             {skill}
                           </span>
                         ))}
-                        {resume.structuredData.skills.length > 8 && (
+                        {resume.structuredData.skills.length > 6 && (
                           <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
-                            +{resume.structuredData.skills.length - 8} more
+                            +{resume.structuredData.skills.length - 6} more
                           </span>
                         )}
                       </div>
@@ -251,7 +251,7 @@ export default function CandidateDashboard() {
                     <div className="col-span-1 md:col-span-2">
                       <p className="text-xs text-blue-600 font-medium mb-2">Technologies</p>
                       <div className="flex flex-wrap gap-2">
-                        {resume.structuredData.technologies.slice(0, 6).map((tech, index) => (
+                        {resume.structuredData.technologies.slice(0, 6).map((tech: string, index: number) => (
                           <span
                             key={index}
                             className="px-3 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full font-medium"

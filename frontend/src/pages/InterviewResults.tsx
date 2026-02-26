@@ -4,7 +4,7 @@ import { interviewAPI, Interview } from '../services/api';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
 import DifficultyBadge from '../components/DifficultyBadge';
-import { Award, TrendingUp, CheckCircle, XCircle, Lightbulb, ArrowLeft, AlertCircle, Code2, FileText, Zap } from 'lucide-react';
+import { Award, TrendingUp, CheckCircle, XCircle, Lightbulb, ArrowLeft, AlertCircle, Code2, FileText, Zap, TrendingDown, Target } from 'lucide-react';
 
 // Helper component for safe score display
 const ScoreDisplay = ({ score, label, color = 'blue' }: { score?: number; label: string; color?: string }) => {
@@ -126,6 +126,21 @@ export default function InterviewResults() {
 
   const finalEvaluation = interview.finalEvaluation;
   const overallScore = interview.averageScore || 0;
+  const skillPerformanceRecord =
+    interview.skillPerformance instanceof Map
+      ? Object.fromEntries(interview.skillPerformance.entries())
+      : (interview.skillPerformance || {});
+  const weakestSkill = Object.values(skillPerformanceRecord).sort((a, b) => a.score - b.score)[0]?.topicName;
+
+  const getDifficultyShift = (current?: string, previous?: string) => {
+    const order = ['easy', 'medium', 'hard'];
+    const currentIndex = order.indexOf(current || '');
+    const previousIndex = order.indexOf(previous || '');
+    if (currentIndex < 0 || previousIndex < 0 || currentIndex === previousIndex) {
+      return null;
+    }
+    return currentIndex > previousIndex ? 'up' : 'down';
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
@@ -263,6 +278,10 @@ export default function InterviewResults() {
           {interview.answers && interview.answers.length > 0 ? (
             interview.answers.map((answer, index) => {
               const question = interview.questions?.[index];
+              const previousDifficulty = index > 0 ? interview.questions?.[index - 1]?.difficulty : undefined;
+              const difficultyShift = getDifficultyShift(question?.difficulty, previousDifficulty);
+              const targetingWeakSkill =
+                Boolean(question?.targetingWeakSkill) || Boolean(question?.topic && weakestSkill && question.topic === weakestSkill);
               return (
                 <div key={index} className="border border-slate-200 rounded-xl p-6 bg-white/80 hover:shadow-md transition-shadow">
                   {/* Question Header with Metadata */}
@@ -279,6 +298,24 @@ export default function InterviewResults() {
                         {question?.domain && (
                           <span className="px-2 py-1 bg-cyan-100 text-cyan-700 text-xs rounded-full">
                             {question.domain}
+                          </span>
+                        )}
+                        {difficultyShift === 'up' && (
+                          <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-full inline-flex items-center gap-1">
+                            <TrendingUp size={12} />
+                            Difficulty Increased
+                          </span>
+                        )}
+                        {difficultyShift === 'down' && (
+                          <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full inline-flex items-center gap-1">
+                            <TrendingDown size={12} />
+                            Difficulty Decreased
+                          </span>
+                        )}
+                        {targetingWeakSkill && (
+                          <span className="px-2 py-1 bg-rose-100 text-rose-700 text-xs rounded-full inline-flex items-center gap-1">
+                            <Target size={12} />
+                            Targeting weak skill
                           </span>
                         )}
                         {answer.isCodingAnswer && (

@@ -107,27 +107,27 @@ export default function CandidateDetailView() {
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="text-center p-4 bg-blue-50 rounded-lg">
                 <div className="text-2xl font-bold text-blue-600">
-                  {finalEvaluation ? finalEvaluation.technicalAccuracy.toFixed(1) : '—'}
+                  {(interview.averageScore ?? 0).toFixed(1)}
                 </div>
-                <p className="text-sm text-gray-600">Technical Accuracy</p>
+                <p className="text-sm text-gray-600">Overall Score</p>
               </div>
               <div className="text-center p-4 bg-green-50 rounded-lg">
                 <div className="text-2xl font-bold text-green-600">
-                  {finalEvaluation ? finalEvaluation.clarity.toFixed(1) : '—'}
+                  {(interview.theoreticalScore ?? 0).toFixed(1)}
                 </div>
-                <p className="text-sm text-gray-600">Clarity</p>
+                <p className="text-sm text-gray-600">Theoretical Score</p>
               </div>
               <div className="text-center p-4 bg-indigo-50 rounded-lg">
                 <div className="text-2xl font-bold text-indigo-600">
-                  {finalEvaluation ? finalEvaluation.depth.toFixed(1) : '—'}
+                  {(interview.codingScore ?? 0).toFixed(1)}
                 </div>
-                <p className="text-sm text-gray-600">Depth</p>
+                <p className="text-sm text-gray-600">Coding Score</p>
               </div>
               <div className="text-center p-4 bg-amber-50 rounded-lg">
                 <div className="text-2xl font-bold text-amber-600">
-                  {finalEvaluation ? finalEvaluation.problemSolving.toFixed(1) : '—'}
+                  {interview.questions.length}
                 </div>
-                <p className="text-sm text-gray-600">Problem Solving</p>
+                <p className="text-sm text-gray-600">Questions</p>
               </div>
             </div>
           </div>
@@ -137,33 +137,6 @@ export default function CandidateDetailView() {
             <h2 className="text-xl font-semibold mb-4">Final Evaluation</h2>
             {finalEvaluation && Object.keys(finalEvaluation).length > 0 ? (
               <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="p-4 rounded-lg bg-blue-50 border border-blue-200">
-                    <p className="text-xs font-medium text-blue-600 mb-1">Technical Accuracy</p>
-                    <div className="text-2xl font-bold text-blue-700">
-                      {finalEvaluation?.technicalAccuracy?.toFixed(1) ?? '—'}
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
-                    <p className="text-xs font-medium text-emerald-600 mb-1">Clarity</p>
-                    <div className="text-2xl font-bold text-emerald-700">
-                      {finalEvaluation?.clarity?.toFixed(1) ?? '—'}
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-lg bg-purple-50 border border-purple-200">
-                    <p className="text-xs font-medium text-purple-600 mb-1">Depth</p>
-                    <div className="text-2xl font-bold text-purple-700">
-                      {finalEvaluation?.depth?.toFixed(1) ?? '—'}
-                    </div>
-                  </div>
-                  <div className="p-4 rounded-lg bg-amber-50 border border-amber-200">
-                    <p className="text-xs font-medium text-amber-600 mb-1">Problem Solving</p>
-                    <div className="text-2xl font-bold text-amber-700">
-                      {finalEvaluation?.problemSolving?.toFixed(1) ?? '—'}
-                    </div>
-                  </div>
-                </div>
-
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
                     <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
@@ -204,11 +177,11 @@ export default function CandidateDetailView() {
                   <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
                     <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
                       <Lightbulb size={16} className="text-yellow-600" />
-                      Improvements
+                      Recommendations
                     </h4>
-                    {finalEvaluation?.improvements && finalEvaluation.improvements.length > 0 ? (
+                    {finalEvaluation?.recommendations && finalEvaluation.recommendations.length > 0 ? (
                       <ul className="space-y-2">
-                        {finalEvaluation.improvements.map((improvement, i) => (
+                        {finalEvaluation.recommendations.map((improvement, i) => (
                           <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
                             <span className="text-yellow-600 mt-0.5">💡</span>
                             <span>{improvement}</span>
@@ -219,13 +192,6 @@ export default function CandidateDetailView() {
                       <p className="text-sm text-gray-500 italic">No suggestions available</p>
                     )}
                   </div>
-                </div>
-
-                <div className="p-4 rounded-lg border border-gray-300 bg-gradient-to-r from-gray-50 to-gray-100">
-                  <p className="text-sm font-medium text-gray-600 mb-2">Hiring Recommendation</p>
-                  <p className="text-lg font-bold text-gray-900 capitalize">
-                    {finalEvaluation?.hiringRecommendation?.replace('-', ' ') ?? 'No Decision'}
-                  </p>
                 </div>
               </div>
             ) : (
@@ -240,10 +206,10 @@ export default function CandidateDetailView() {
             <h2 className="text-xl font-semibold mb-4">Interview Q&A</h2>
             <div className="space-y-6">
               {interview.answers.map((answer, index) => {
-                const question = interview.questions.find((q) => q.id === answer.questionId);
+                const question = interview.questions[answer.questionIndex ?? index];
 
                 return (
-                  <div key={answer.questionId} className="border rounded-lg p-6">
+                  <div key={`${answer.questionIndex ?? index}-${index}`} className="border rounded-lg p-6">
                     <div className="flex items-start justify-between mb-4">
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">

@@ -10,20 +10,37 @@ import Editor from '@monaco-editor/react';
  * - Auto-save functionality
  * - Code submission
  */
+type SupportedLanguage = 'javascript' | 'python' | 'java' | 'cpp';
+
+interface CodingSubmitPayload {
+  code: string;
+  language: SupportedLanguage;
+  questionIndex: number;
+  question: string;
+}
+
+interface CodingQuestionComponentProps {
+  question: string;
+  questionIndex: number;
+  onSubmit: (payload: CodingSubmitPayload) => void;
+  onCodeChange?: (code: string, language: SupportedLanguage) => void;
+  isSubmitting?: boolean;
+}
+
 const CodingQuestionComponent = ({
   question,
   questionIndex,
   onSubmit,
   onCodeChange,
   isSubmitting = false
-}) => {
+}: CodingQuestionComponentProps) => {
   const [code, setCode] = useState('');
-  const [language, setLanguage] = useState('javascript');
+  const [language, setLanguage] = useState<SupportedLanguage>('javascript');
   const [showOutput, setShowOutput] = useState(false);
-  const [savedAt, setSavedAt] = useState(null);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
 
   // Language templates
-  const templates = {
+  const templates: Record<SupportedLanguage, string> = {
     javascript: `// Write your JavaScript solution here
 function solve() {
   // Your code here
@@ -82,8 +99,8 @@ int main() {
     return () => clearTimeout(timer);
   }, [code, language, questionIndex]);
 
-  const handleLanguageChange = (e) => {
-    const newLanguage = e.target.value;
+  const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const newLanguage = e.target.value as SupportedLanguage;
     setLanguage(newLanguage);
     setCode(templates[newLanguage] || '');
     if (onCodeChange) {
@@ -133,7 +150,7 @@ int main() {
         </label>
 
         <div className="text-sm text-gray-500">
-          {savedAt && `Auto-saved at ${savedAt.toLocaleTimeString()}`}
+          {savedAt ? `Auto-saved at ${savedAt.toLocaleTimeString()}` : ''}
         </div>
       </div>
 

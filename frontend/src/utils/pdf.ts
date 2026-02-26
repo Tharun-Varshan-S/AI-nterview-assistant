@@ -9,8 +9,9 @@ export interface ExtractedFields {
 export async function extractPdfText(file: File): Promise<string> {
   try {
     const arrayBuffer = await file.arrayBuffer();
+    const pdfLibUrl = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs';
     const pdfjs = await import(
-      /* @vite-ignore */ 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.6.82/build/pdf.min.mjs'
+      /* @vite-ignore */ pdfLibUrl
     );
     // Configure worker from CDN
     // @ts-ignore

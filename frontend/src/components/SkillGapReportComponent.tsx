@@ -9,8 +9,32 @@ import React, { useState } from 'react';
  * - Weak area focus suggestions
  * - Timeline estimates
  */
-const SkillGapReportComponent = ({ report, skillSummary, performanceMetrics }) => {
-  const [expandedSection, setExpandedSection] = useState(null);
+interface SkillGapReport {
+  strongestSkills?: string[];
+  weakestSkills?: string[];
+  recommendedFocusAreas?: string[];
+  learningSuggestions?: string[];
+  estimatedRoadmapWeeks?: number;
+  summary?: string;
+}
+
+interface SkillSummary {
+  strongestSkills?: string[];
+}
+
+interface PerformanceMetrics {
+  interviewCount?: number;
+  overallScore?: number;
+}
+
+interface SkillGapReportProps {
+  report?: SkillGapReport;
+  skillSummary?: SkillSummary;
+  performanceMetrics?: PerformanceMetrics;
+}
+
+const SkillGapReportComponent = ({ report, skillSummary, performanceMetrics }: SkillGapReportProps) => {
+  const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
   if (!report) {
     return (
@@ -20,7 +44,7 @@ const SkillGapReportComponent = ({ report, skillSummary, performanceMetrics }) =
     );
   }
 
-  const renderSection = (title, content, icon) => (
+  const renderSection = (title: string, content: string | string[], icon: string) => (
     <div className="mb-4 border border-gray-200 rounded-lg overflow-hidden">
       <button
         onClick={() =>
@@ -41,7 +65,7 @@ const SkillGapReportComponent = ({ report, skillSummary, performanceMetrics }) =
         <div className="px-6 py-4 bg-white">
           {Array.isArray(content) ? (
             <ul className="space-y-2">
-              {content.map((item, idx) => (
+              {content.map((item: string, idx: number) => (
                 <li key={idx} className="flex gap-3 items-start">
                   <span className="text-blue-600 font-bold mt-0.5">•</span>
                   <span className="text-gray-700">{item}</span>
@@ -125,7 +149,7 @@ const SkillGapReportComponent = ({ report, skillSummary, performanceMetrics }) =
           { label: 'Learning Velocity', value: `+${((performanceMetrics?.overallScore || 0) / (performanceMetrics?.interviewCount || 1)).toFixed(2)}/interview` }
         ]} />
 
-        <DetailCard title="Skill Profile" items={skillSummary?.strongestSkills?.slice(0, 3).map((skill, idx) => ({
+        <DetailCard title="Skill Profile" items={skillSummary?.strongestSkills?.slice(0, 3).map((skill: string, idx: number) => ({
           label: `Top Skill ${idx + 1}`,
           value: skill
         })) || []} />
@@ -162,7 +186,14 @@ const SkillGapReportComponent = ({ report, skillSummary, performanceMetrics }) =
 /**
  * SummaryCard Component
  */
-const SummaryCard = ({ label, value, color, icon }) => {
+interface SummaryCardProps {
+  label: string;
+  value: string;
+  color: 'green' | 'orange' | 'blue';
+  icon: string;
+}
+
+const SummaryCard = ({ label, value, color, icon }: SummaryCardProps) => {
   const colorClasses = {
     green: 'bg-green-50 border-green-200 text-green-800',
     orange: 'bg-orange-50 border-orange-200 text-orange-800',
@@ -183,11 +214,21 @@ const SummaryCard = ({ label, value, color, icon }) => {
 /**
  * DetailCard Component
  */
-const DetailCard = ({ title, items }) => (
+interface DetailCardItem {
+  label: string;
+  value: string | number;
+}
+
+interface DetailCardProps {
+  title: string;
+  items: DetailCardItem[];
+}
+
+const DetailCard = ({ title, items }: DetailCardProps) => (
   <div className="bg-white border border-gray-200 rounded-lg p-4">
     <h4 className="font-semibold text-gray-800 mb-3">{title}</h4>
     <div className="space-y-2">
-      {items.map((item, idx) => (
+      {items.map((item: DetailCardItem, idx: number) => (
         <div key={idx} className="flex justify-between">
           <span className="text-gray-600 text-sm">{item.label}</span>
           <span className="font-medium text-gray-800">{item.value}</span>

@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { interviewAPI, Interview } from '../services/api';
+import { interviewAPI, Interview, SessionMetrics } from '../services/api';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
 import CountdownTimer from '../components/CountdownTimer';
 import DifficultyBadge from '../components/DifficultyBadge';
 import CodingQuestionComponent from '../components/CodingQuestionComponent';
 import { interviewStateStorage } from '../utils/interviewStateStorage';
-import { Send, CheckCircle, AlertCircle } from 'lucide-react';
+import { Send, CheckCircle, AlertCircle, TrendingUp, TrendingDown, Target } from 'lucide-react';
 
 const QUESTION_TIME_LIMIT = 180; // 3 minutes per question
 
@@ -23,6 +23,9 @@ export default function InterviewSession() {
   const [submitting, setSubmitting] = useState(false);
   const [timeKey, setTimeKey] = useState(0);
   const [wasRefreshed, setWasRefreshed] = useState(false);
+  const [difficultyChange, setDifficultyChange] = useState<'increased' | 'decreased' | null>(null);
+  const [sessionMetrics, setSessionMetrics] = useState<SessionMetrics | null>(null);
+  const [targetWeakTopic, setTargetWeakTopic] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -114,7 +117,8 @@ export default function InterviewSession() {
 
     try {
       setSubmitting(true);
-      const { interview: updatedInterview } = await interviewAPI.submitAnswer(
+      const previousDifficulty = interview?.currentDifficulty;
+      const { interview: updatedInterview, currentDifficulty, sessionMetrics: nextSessionMetrics } = await interviewAPI.submitAnswer(
         id!,
         {
           questionIndex: currentQuestionIndex,
@@ -126,6 +130,18 @@ export default function InterviewSession() {
       );
 
       setInterview(updatedInterview);
+      setSessionMetrics(nextSessionMetrics || null);
+      if (nextSessionMetrics?.weakTopics?.length) {
+        setTargetWeakTopic(nextSessionMetrics.weakTopics[0].topic);
+      }
+      if (previousDifficulty && currentDifficulty && previousDifficulty !== currentDifficulty) {
+        const order = ['easy', 'medium', 'hard'];
+        const previousIndex = order.indexOf(previousDifficulty);
+        const currentIndex = order.indexOf(currentDifficulty);
+        setDifficultyChange(currentIndex > previousIndex ? 'increased' : 'decreased');
+      } else {
+        setDifficultyChange(null);
+      }
       setAnswer('');
       setCodingAnswer('');
 
@@ -182,6 +198,9 @@ export default function InterviewSession() {
   const isCoding = isCodingQuestion(currentQuestion);
   const progress = ((currentQuestionIndex) / interview.questions.length) * 100;
   const questionTimeLimit = currentQuestion.timeLimit ?? QUESTION_TIME_LIMIT;
+  const targetingWeakSkill =
+    Boolean(currentQuestion.targetingWeakSkill) ||
+    (Boolean(targetWeakTopic) && currentQuestion.topic === targetWeakTopic);
 
   function isCodingQuestion(question: Interview['questions'][0]) {
     const questionAny = question as { isCoding?: boolean; topic?: string; domain?: string; question?: string };
@@ -228,10 +247,31 @@ export default function InterviewSession() {
       {/* Interview Card */}
       <div className="bg-white rounded-xl shadow-lg border p-8">
         {/* Question Header */}
-        <div className="flex items-center justify-between mb-6 pb-4 border-b">
-          <div className="flex items-center gap-3">
+        <div className="flex items-center justify-between mb-6 pb-4 border-b gap-3 flex-wrap">
+          <div className="flex items-center gap-3 flex-wrap">
             <DifficultyBadge difficulty={currentQuestion.difficulty} />
             <span className="text-gray-600 text-sm">Question {currentQuestionIndex + 1}</span>
+            <span className="px-2 py-1 rounded-full text-xs font-medium bg-slate-100 text-slate-700">
+              Current Adaptive Level: {interview.currentDifficulty || currentQuestion.difficulty}
+            </span>
+            {difficultyChange === 'increased' && (
+              <span className="px-2 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700 inline-flex items-center gap-1">
+                <TrendingUp size={12} />
+                Difficulty Increased
+              </span>
+            )}
+            {difficultyChange === 'decreased' && (
+              <span className="px-2 py-1 rounded-full text-xs font-medium bg-amber-100 text-amber-700 inline-flex items-center gap-1">
+                <TrendingDown size={12} />
+                Difficulty Decreased
+              </span>
+            )}
+            {targetingWeakSkill && (
+              <span className="px-2 py-1 rounded-full text-xs font-medium bg-rose-100 text-rose-700 inline-flex items-center gap-1">
+                <Target size={12} />
+                Targeting weak skill
+              </span>
+            )}
           </div>
           <CountdownTimer
             key={timeKey}
@@ -245,6 +285,23 @@ export default function InterviewSession() {
           <h2 className="text-2xl font-semibold text-gray-900 leading-relaxed">
             {currentQuestion.question}
           </h2>
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
+            {currentQuestion.topic && (
+              <span className="px-2 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700">
+                Topic: {currentQuestion.topic}
+              </span>
+            )}
+            {currentQuestion.domain && (
+              <span className="px-2 py-1 rounded-full text-xs font-medium bg-cyan-100 text-cyan-700">
+                Domain: {currentQuestion.domain}
+              </span>
+            )}
+          </div>
+          {sessionMetrics && (
+            <p className="text-xs text-slate-500 mt-3">
+              Session score trend: {sessionMetrics.averageScore.toFixed(1)}/10 after {sessionMetrics.answeredCount} answered
+            </p>
+          )}
         </div>
 
         {/* Answer Input */}
@@ -254,11 +311,11 @@ export default function InterviewSession() {
               question={currentQuestion.question}
               questionIndex={currentQuestionIndex}
               isSubmitting={submitting}
-              onCodeChange={(code, language) => {
+              onCodeChange={(code: string, language: string) => {
                 setCodingAnswer(code);
                 setCodingLanguage(language);
               }}
-              onSubmit={({ code, language }) =>
+              onSubmit={({ code, language }: { code: string; language: string }) =>
                 handleSubmitAnswer(
                   { response: code, isCodingAnswer: true, language },
                   false

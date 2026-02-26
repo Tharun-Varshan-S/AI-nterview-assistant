@@ -107,11 +107,14 @@ export interface Resume {
 }
 
 export interface Question {
+  id?: string;
   question: string;
   difficulty: 'easy' | 'medium' | 'hard';
   topic?: string;
   domain?: string;
   timeLimit?: number;
+  isCoding?: boolean;
+  targetingWeakSkill?: boolean;
 }
 
 export interface AIEvaluation {
@@ -132,6 +135,7 @@ export interface AIEvaluation {
 }
 
 export interface Answer {
+  questionId?: string;
   questionIndex: number;
   question: string;
   response: string;
@@ -143,8 +147,14 @@ export interface Answer {
 
 export interface FinalEvaluation {
   overallScore: number;
+  technicalAccuracy?: number;
+  clarity?: number;
+  depth?: number;
+  problemSolving?: number;
   strengths?: string[];
   weaknesses?: string[];
+  improvements?: string[];
+  hiringRecommendation?: string;
   recommendations?: string[];
   evaluatedAt?: string;
 }
@@ -181,6 +191,30 @@ export interface Interview {
   systemDesignScore?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface SessionMetricsTopic {
+  topic: string;
+  avgScore: number;
+  attemptCount: number;
+}
+
+export interface SessionMetrics {
+  answeredCount: number;
+  averageScore: number;
+  theoreticalAvg: number;
+  codingAvg: number;
+  difficultyDistribution: { easy: number; medium: number; hard: number };
+  strongTopics: SessionMetricsTopic[];
+  weakTopics: SessionMetricsTopic[];
+  topicPerformance?: SessionMetricsTopic[];
+}
+
+export interface SubmitAnswerResponse {
+  answer: Answer;
+  interview: Interview;
+  currentDifficulty?: 'easy' | 'medium' | 'hard';
+  sessionMetrics?: SessionMetrics;
 }
 
 // Auth API
@@ -262,7 +296,7 @@ export const interviewAPI = {
   ) => {
     const { data } = await api.post<{
       success: boolean;
-      data: { answer: any; interview: Interview; currentDifficulty?: string; sessionMetrics?: any };
+      data: SubmitAnswerResponse;
     }>(`/interview/${interviewId}/submit-answer`, answerData);
     return data.data;
   },

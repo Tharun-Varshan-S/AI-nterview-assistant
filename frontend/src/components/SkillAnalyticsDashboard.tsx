@@ -1,220 +1,189 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+} from 'recharts';
+import { Interview, SkillPerformance, DifficultyBreakdown } from '../services/api';
 
-/**
- * SkillAnalyticsDashboard
- * 
- * Displays:
- * - Overall performance metrics
- * - Skill breakdown by topic
- * - Difficulty distribution
- * - Learning velocity
- * - Performance trends
- */
-const SkillAnalyticsDashboard = ({ interviews = [] }) => {
-  const metrics = useMemo(() => {
-    if (!interviews.length) return null;
+interface SkillAnalyticsDashboardProps {
+  interviews: Interview[];
+}
 
-    const completed = interviews.filter((i) => i.status === 'completed');
+interface AggregatedMetrics {
+  interviewCount: number;
+  overallScore: number;
+  theoreticalScore: number;
+  codingScore: number;
+  strongestSkill: string;
+  weakestSkill: string;
+  trend: Array<{ name: string; score: number }>;
+  difficultyData: Array<{ level: string; attempted: number }>;
+}
+
+function normalizeSkillPerformance(
+  skillPerformance: Interview['skillPerformance']
+): Record<string, SkillPerformance> {
+  if (!skillPerformance) return {};
+  if (skillPerformance instanceof Map) {
+    return Object.fromEntries(skillPerformance.entries());
+  }
+  return skillPerformance as Record<string, SkillPerformance>;
+}
+
+function normalizeDifficultyBreakdown(
+  difficultyBreakdown: DifficultyBreakdown | undefined
+): Required<DifficultyBreakdown> {
+  return {
+    easy: difficultyBreakdown?.easy || { attempted: 0, avgScore: 0 },
+    medium: difficultyBreakdown?.medium || { attempted: 0, avgScore: 0 },
+    hard: difficultyBreakdown?.hard || { attempted: 0, avgScore: 0 },
+  };
+}
+
+export default function SkillAnalyticsDashboard({ interviews }: SkillAnalyticsDashboardProps) {
+  const metrics = useMemo<AggregatedMetrics | null>(() => {
+    const completed = interviews
+      .filter((i) => i.status === 'completed')
+      .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
     if (!completed.length) return null;
 
-    // Calculate metrics
-    const totalScore = completed.reduce((sum, i) => sum + (i.averageScore || 0), 0);
-    const avgScore = totalScore / completed.length;
+    const overallScore = completed.reduce((sum, i) => sum + (i.averageScore || 0), 0) / completed.length;
 
-    const theoreticalScores = completed
-      .filter((i) => i.theoreticalScore > 0)
-      .map((i) => i.theoreticalScore);
-    const theoreticalAvg =
-      theoreticalScores.length > 0
-        ? theoreticalScores.reduce((a, b) => a + b) / theoreticalScores.length
-        : 0;
+    const theoreticalValues = completed.map((i) => i.theoreticalScore || 0).filter((s) => s > 0);
+    const theoreticalScore = theoreticalValues.length
+      ? theoreticalValues.reduce((sum, s) => sum + s, 0) / theoreticalValues.length
+      : 0;
 
-    const codingScores = completed
-      .filter((i) => i.codingScore > 0)
-      .map((i) => i.codingScore);
-    const codingAvg =
-      codingScores.length > 0
-        ? codingScores.reduce((a, b) => a + b) / codingScores.length
-        : 0;
+    const codingValues = completed.map((i) => i.codingScore || 0).filter((s) => s > 0);
+    const codingScore = codingValues.length
+      ? codingValues.reduce((sum, s) => sum + s, 0) / codingValues.length
+      : 0;
 
-    // Trend calculation
-    const sortedByDate = [...completed].sort(
-      (a, b) => new Date(a.createdAt) - new Date(b.createdAt)
-    );
-    const trend = sortedByDate.map((i, idx) => ({ idx: idx + 1, score: i.averageScore }));
-
-    // Skill breakdown
-    const topicScores = {};
+    const topicMap: Record<string, number[]> = {};
     completed.forEach((interview) => {
-      (interview.questionsAsked || []).forEach((question, idx) => {
-        const topic = question.topic || 'General';
-        const answer = interview.answers?.[idx];
-        if (answer) {
-          if (!topicScores[topic]) {
-            topicScores[topic] = [];
-          }
-          const score = answer.isCodingAnswer ? answer.aiEvaluation?.logicScore || 0 : answer.aiEvaluation?.score || 0;
-          topicScores[topic].push(score);
+      const skills = normalizeSkillPerformance(interview.skillPerformance);
+      Object.entries(skills).forEach(([topic, data]) => {
+        if (!topicMap[topic]) {
+          topicMap[topic] = [];
         }
+        topicMap[topic].push(data.score || 0);
       });
     });
 
-    const skillBreakdown = Object.entries(topicScores)
-      .map(([topic, scores]) => ({
-        topic,
-        avgScore: scores.reduce((a, b) => a + b, 0) / scores.length,
-        attempts: scores.length
-      }))
-      .sort((a, b) => b.avgScore - a.avgScore);
+    const topicAverages = Object.entries(topicMap).map(([topic, scores]) => ({
+      topic,
+      avg: scores.reduce((sum, s) => sum + s, 0) / Math.max(scores.length, 1),
+    }));
+
+    topicAverages.sort((a, b) => b.avg - a.avg);
+
+    const difficultyTotals = {
+      easy: 0,
+      medium: 0,
+      hard: 0,
+    };
+
+    completed.forEach((interview) => {
+      const breakdown = normalizeDifficultyBreakdown(interview.difficultyBreakdown);
+      difficultyTotals.easy += breakdown.easy.attempted || 0;
+      difficultyTotals.medium += breakdown.medium.attempted || 0;
+      difficultyTotals.hard += breakdown.hard.attempted || 0;
+    });
 
     return {
       interviewCount: completed.length,
-      overallScore: Math.round(avgScore * 10) / 10,
-      theoreticalScore: Math.round(theoreticalAvg * 10) / 10,
-      codingScore: Math.round(codingAvg * 10) / 10,
-      trend,
-      skillBreakdown,
-      lastInterviewDate: completed[completed.length - 1].createdAt
+      overallScore: Number(overallScore.toFixed(1)),
+      theoreticalScore: Number(theoreticalScore.toFixed(1)),
+      codingScore: Number(codingScore.toFixed(1)),
+      strongestSkill: topicAverages[0]?.topic || 'N/A',
+      weakestSkill: topicAverages[topicAverages.length - 1]?.topic || 'N/A',
+      trend: completed.map((interview, index) => ({
+        name: `I${index + 1}`,
+        score: Number((interview.averageScore || 0).toFixed(1)),
+      })),
+      difficultyData: [
+        { level: 'Easy', attempted: difficultyTotals.easy },
+        { level: 'Medium', attempted: difficultyTotals.medium },
+        { level: 'Hard', attempted: difficultyTotals.hard },
+      ],
     };
   }, [interviews]);
 
   if (!metrics) {
-    return (
-      <div className="p-8 text-center text-gray-500">
-        <p>Complete interviews to see analytics</p>
-      </div>
-    );
+    return <div className="p-8 text-center text-gray-500">Complete interviews to see analytics</div>;
   }
 
   return (
     <div className="space-y-6">
-      {/* Top Metrics Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <MetricCard
-          label="Overall Score"
-          value={metrics.overallScore}
-          max={10}
-          color="blue"
-        />
-        <MetricCard
-          label="Theoretical"
-          value={metrics.theoreticalScore}
-          max={10}
-          color="green"
-        />
-        <MetricCard
-          label="Coding"
-          value={metrics.codingScore}
-          max={10}
-          color="purple"
-        />
-        <MetricCard
-          label="Interviews"
-          value={metrics.interviewCount}
-          max={null}
-          color="orange"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        <MetricCard label="Total Interviews" value={metrics.interviewCount.toString()} />
+        <MetricCard label="Overall Average" value={`${metrics.overallScore}/10`} />
+        <MetricCard label="Theoretical Avg" value={`${metrics.theoreticalScore}/10`} />
+        <MetricCard label="Coding Avg" value={`${metrics.codingScore}/10`} />
+        <MetricCard label="Strongest Skill" value={metrics.strongestSkill} />
+        <MetricCard label="Weakest Skill" value={metrics.weakestSkill} />
       </div>
 
-      {/* Performance Trend */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-4 text-gray-800">Performance Trend</h3>
-        <div className="flex items-end justify-center gap-2 h-40">
-          {metrics.trend.map((point, idx) => (
-            <div key={idx} className="flex flex-col items-center">
-              <div
-                className="bg-blue-500 rounded-t hover:bg-blue-600 transition"
-                style={{
-                  width: '20px',
-                  height: `${(point.score / 10) * 160}px`,
-                  minHeight: '4px'
-                }}
-                title={`Interview ${point.idx}: ${point.score.toFixed(1)}/10`}
-              />
-              <span className="text-xs text-gray-600 mt-1">{point.idx}</span>
-            </div>
-          ))}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <h3 className="text-sm font-semibold text-slate-900 mb-3">Performance Trend</h3>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={metrics.trend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
+                <YAxis domain={[0, 10]} stroke="#64748b" fontSize={12} />
+                <Tooltip formatter={(value: number | string | undefined) => `${Number(value || 0)}/10`} />
+                <Line
+                  type="monotone"
+                  dataKey="score"
+                  stroke="#2563eb"
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
         </div>
-      </div>
 
-      {/* Skill Breakdown */}
-      <div className="bg-white p-6 rounded-lg shadow">
-        <h3 className="text-lg font-semibold mb-4 text-gray-800">Skills Performance</h3>
-        <div className="space-y-3">
-          {metrics.skillBreakdown.length === 0 ? (
-            <p className="text-gray-500 text-sm">No skill data available yet</p>
-          ) : (
-            metrics.skillBreakdown.map((skill, idx) => (
-              <div key={idx}>
-                <div className="flex justify-between mb-1">
-                  <span className="text-sm font-medium text-gray-700">{skill.topic}</span>
-                  <span className="text-sm text-gray-600">
-                    {skill.avgScore.toFixed(1)}/10 ({skill.attempts} attempts)
-                  </span>
-                </div>
-                <div className="w-full bg-gray-200 rounded-full h-2">
-                  <div
-                    className="bg-gradient-to-r from-green-400 to-green-600 h-2 rounded-full transition-all"
-                    style={{ width: `${(skill.avgScore / 10) * 100}%` }}
-                  />
-                </div>
-              </div>
-            ))
-          )}
+        <div className="rounded-xl border border-slate-200 bg-white p-4">
+          <h3 className="text-sm font-semibold text-slate-900 mb-3">Difficulty Breakdown</h3>
+          <div className="h-56">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={metrics.difficultyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="level" stroke="#64748b" fontSize={12} />
+                <YAxis stroke="#64748b" fontSize={12} allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="attempted" fill="#0f766e" radius={[6, 6, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
         </div>
-      </div>
-
-      {/* Legend & Info */}
-      <div className="bg-blue-50 border border-blue-200 p-4 rounded-lg text-sm text-blue-800">
-        <p className="font-semibold mb-2">📊 Analytics Guide:</p>
-        <ul className="list-disc list-inside space-y-1">
-          <li>
-            <strong>Overall Score:</strong> Average of all interview scores
-          </li>
-          <li>
-            <strong>Theoretical:</strong> Performance on conceptual questions
-          </li>
-          <li>
-            <strong>Coding:</strong> Performance on coding challenges
-          </li>
-          <li>
-            <strong>Skills:</strong> Topic-wise mastery levels (8+ is strong)
-          </li>
-        </ul>
       </div>
     </div>
   );
-};
+}
 
-/**
- * MetricCard Component
- */
-const MetricCard = ({ label, value, max, color }) => {
-  const percentage = max ? (value / max) * 100 : null;
-  const colorClasses = {
-    blue: 'bg-blue-50 text-blue-700 border-blue-200',
-    green: 'bg-green-50 text-green-700 border-green-200',
-    purple: 'bg-purple-50 text-purple-700 border-purple-200',
-    orange: 'bg-orange-50 text-orange-700 border-orange-200'
-  };
+interface MetricCardProps {
+  label: string;
+  value: string;
+}
 
+function MetricCard({ label, value }: MetricCardProps) {
   return (
-    <div className={`border rounded-lg p-4 ${colorClasses[color] || colorClasses.blue}`}>
-      <p className="text-sm font-medium opacity-80 mb-1">{label}</p>
-      <div className="flex items-end justify-between">
-        <p className="text-3xl font-bold">{value}</p>
-        {max && <p className="text-sm opacity-60">/ {max}</p>}
-      </div>
-      {percentage !== null && (
-        <div className="mt-2 h-1 bg-white rounded-full overflow-hidden">
-          <div
-            className="h-full bg-current rounded-full transition-all"
-            style={{ width: `${Math.min(percentage, 100)}%` }}
-          />
-        </div>
-      )}
+    <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+      <p className="text-xs font-medium text-slate-600">{label}</p>
+      <p className="text-lg font-semibold text-slate-900 mt-1 break-words">{value}</p>
     </div>
   );
-};
-
-export default SkillAnalyticsDashboard;
+}

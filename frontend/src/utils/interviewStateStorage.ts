@@ -6,8 +6,10 @@
 interface InterviewState {
   currentQuestionIndex: number;
   answers: Array<{
-    questionId: string;
+    questionIndex: number;
     response: string;
+    isCodingAnswer?: boolean;
+    language?: string;
   }>;
   timestamp: number;
 }
