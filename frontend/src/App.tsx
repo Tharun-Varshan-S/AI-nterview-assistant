@@ -10,6 +10,10 @@ import InterviewSession from './pages/InterviewSession';
 import InterviewResults from './pages/InterviewResults';
 import RecruiterDashboard from './pages/RecruiterDashboard';
 import CandidateDetailView from './pages/CandidateDetailView';
+import PracticePage from './pages/PracticePage';
+import PracticeSessionPage from './pages/PracticeSessionPage';
+import MockSetupPage from './pages/MockSetupPage';
+import AnalyticsPage from './pages/AnalyticsPage';
 
 function App() {
   return (
@@ -31,6 +35,10 @@ function App() {
           >
             <Route index element={<Navigate to="/candidate/dashboard" replace />} />
             <Route path="dashboard" element={<CandidateDashboard />} />
+            <Route path="practice" element={<PracticePage />} />
+            <Route path="practice/:sessionId" element={<PracticeSessionPage />} />
+            <Route path="mock/setup" element={<MockSetupPage />} />
+            <Route path="analytics" element={<AnalyticsPage />} />
             <Route path="interview/:id" element={<InterviewSession />} />
             <Route path="results/:id" element={<InterviewResults />} />
           </Route>

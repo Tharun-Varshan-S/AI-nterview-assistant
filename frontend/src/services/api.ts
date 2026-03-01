@@ -277,6 +277,34 @@ export interface SubmitAnswerResponse {
   adaptiveEvent?: AdaptiveHistoryEvent;
 }
 
+export interface PracticeSession {
+  _id: string;
+  mode: 'aptitude' | 'coding' | 'technical' | 'behavioral';
+  topic: string;
+  difficulty: 'easy' | 'medium' | 'hard';
+  averageScore: number;
+  status: 'in-progress' | 'completed';
+  questionsAttempted: number;
+  totalQuestions: number;
+  completedAt?: string;
+  createdAt: string;
+}
+
+export interface OverviewAnalytics {
+  readinessScore: number;
+  readinessPercentage: number;
+  strongestSkill: string;
+  weakestSkill: string;
+  totalSessions: number;
+  totalInterviews: number;
+  totalPracticeSessions: number;
+  averageScore: number;
+  codingAccuracy: number;
+  theoreticalAccuracy: number;
+  learningVelocity: number;
+  consistencyScore: number;
+}
+
 // Auth API
 export const authAPI = {
   register: async (name: string, email: string, password: string, role: 'candidate' | 'recruiter') => {
@@ -316,7 +344,7 @@ export const resumeAPI = {
 
 // Interview API
 export const interviewAPI = {
-  create: async (interviewData?: { interviewType?: string; focusTopics?: string[] }) => {
+  create: async (interviewData?: { interviewType?: string; focusTopics?: string[]; focus?: string; questionCount?: number }) => {
     const { data } = await api.post<{ success: boolean; data: Interview }>('/interview/create', interviewData || {});
     return data.data;
   },
@@ -385,6 +413,109 @@ export const interviewAPI = {
   getAdaptiveHistory: async (id: string) => {
     const { data } = await api.get<{ success: boolean; data: AdaptiveHistoryEvent[] }>(`/interview/${id}/adaptive-history`);
     return data.data;
+  },
+
+  startPracticeSession: async (payload: {
+    mode: 'aptitude' | 'coding' | 'technical' | 'behavioral';
+    topic: string;
+    difficulty?: 'easy' | 'medium' | 'hard';
+    questionCount?: number;
+  }) => {
+    const { data } = await api.post<{
+      success: boolean;
+      data: {
+        sessionId: string;
+        mode: string;
+        topic: string;
+        difficulty: string;
+        totalQuestions: number;
+        questions: Question[];
+      };
+    }>('/practice/start', payload);
+    return data;
+  },
+
+  getPracticeSessions: async (params?: { mode?: string; topic?: string; limit?: number; page?: number }) => {
+    const { data } = await api.get<{
+      success: boolean;
+      data: { sessions: PracticeSession[]; pagination: { total: number; page: number; pages: number } };
+    }>('/practice/sessions', { params });
+    return data;
+  },
+
+  getPracticeStats: async (params?: { mode?: string; topic?: string }) => {
+    const { data } = await api.get<{
+      success: boolean;
+      data: {
+        totalSessions: number;
+        averageScore: number;
+        sessionsByMode: Record<string, { count: number; avgScore: number }>;
+        sessionsByTopic: Record<string, { count: number; avgScore: number }>;
+        bestPerformance: number;
+        worstPerformance: number;
+      };
+    }>('/practice/stats', { params });
+    return data;
+  },
+
+  getPracticeSessionDetails: async (sessionId: string) => {
+    const { data } = await api.get<{ success: boolean; data: PracticeSession & { questions: Question[]; answers: Answer[] } }>(
+      `/practice/sessions/${sessionId}`
+    );
+    return data.data;
+  },
+
+  submitPracticeAnswer: async (payload: {
+    sessionId: string;
+    questionIndex: number;
+    response: string;
+    language?: string;
+    timeTaken?: number;
+  }) => {
+    const { data } = await api.post<{
+      success: boolean;
+      data: {
+        score: number;
+        feedback: string | string[];
+        execution: any;
+        complexity?: any;
+        averageScore: number;
+      };
+    }>('/practice/answer', payload);
+    return data.data;
+  },
+
+  completePracticeSession: async (sessionId: string) => {
+    const { data } = await api.post<{
+      success: boolean;
+      data: {
+        sessionId: string;
+        status: string;
+        score: number;
+        totalQuestions: number;
+        questionsAttempted: number;
+        timeSpent: number;
+        skillsImproved: string[];
+      };
+    }>('/practice/complete', { sessionId });
+    return data.data;
+  },
+};
+
+export const analyticsAPI = {
+  getOverviewAnalytics: async () => {
+    const { data } = await api.get<{ success: boolean; data: OverviewAnalytics }>('/analytics/overview');
+    return data;
+  },
+
+  getFullAnalyticsReport: async () => {
+    const { data } = await api.get<{ success: boolean; data: any }>('/analytics/full-report');
+    return data;
+  },
+
+  getResumeConsistency: async () => {
+    const { data } = await api.get<{ success: boolean; data: any }>('/analytics/resume-consistency');
+    return data;
   },
 };
 

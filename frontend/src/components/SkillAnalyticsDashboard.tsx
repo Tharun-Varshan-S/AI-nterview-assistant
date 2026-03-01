@@ -133,10 +133,10 @@ export default function SkillAnalyticsDashboard({ interviews }: SkillAnalyticsDa
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
           <h3 className="text-sm font-semibold text-slate-900 mb-3">Performance Trend</h3>
           <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <LineChart data={metrics.trend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="name" stroke="#64748b" fontSize={12} />
@@ -155,10 +155,10 @@ export default function SkillAnalyticsDashboard({ interviews }: SkillAnalyticsDa
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white p-4">
+        <div className="min-w-0 rounded-xl border border-slate-200 bg-white p-4">
           <h3 className="text-sm font-semibold text-slate-900 mb-3">Difficulty Breakdown</h3>
           <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
               <BarChart data={metrics.difficultyData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
                 <XAxis dataKey="level" stroke="#64748b" fontSize={12} />

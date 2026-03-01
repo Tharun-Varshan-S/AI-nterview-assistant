@@ -350,6 +350,11 @@ exports.simulateCodeExecution = async (question, code, language, testCases = [])
   });
 };
 
+exports.analyzeWithGemini = async (prompt) => {
+  const result = await callGemini(prompt);
+  return JSON.stringify(result);
+};
+
 exports.generateSkillGapReport = async (userSkillSummary) => {
   const payload = buildPromptPayload({
     prompt: evaluationPrompt.buildSkillGapReportPrompt(userSkillSummary),

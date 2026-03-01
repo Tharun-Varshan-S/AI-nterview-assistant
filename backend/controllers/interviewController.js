@@ -51,7 +51,12 @@ const calculateBehaviorMetrics = (answers = []) => {
 
 exports.createInterview = async (req, res, next) => {
   try {
-    const { interviewType = 'theoretical', focusTopics = [] } = req.body;
+    const { 
+      interviewType = 'theoretical', 
+      focusTopics = [],
+      focus = 'random',
+      questionCount = 6
+    } = req.body;
 
     const resume = await Resume.findOne({ userId: req.user.id });
     if (!resume) {
@@ -69,6 +74,14 @@ exports.createInterview = async (req, res, next) => {
       }
     });
 
+    // Determine topics based on focus parameter
+    let topicsToFocus = focusTopics;
+    if (focus === 'weak skills' && previousInterviews.length > 0) {
+      topicsToFocus = AdaptiveEngine.recommendNextTopics(skillPerformanceMap, previousInterviews, Math.ceil(questionCount / 2));
+    } else if (focus === 'random') {
+      topicsToFocus = [];
+    }
+    
     const weakTopics = previousInterviews.length > 0
       ? AdaptiveEngine.recommendNextTopics(skillPerformanceMap, previousInterviews, 3)
       : [];
@@ -76,10 +89,11 @@ exports.createInterview = async (req, res, next) => {
     const questionsResult = await geminiService.generateInterviewQuestionsWithMetadata({
       structuredData: resume.structuredData,
       rawText: resume.extractedText,
-      focusTopics: focusTopics.length > 0 ? focusTopics : weakTopics
+      focusTopics: topicsToFocus.length > 0 ? topicsToFocus : weakTopics,
+      questionCount: Math.min(questionCount, 10)
     });
 
-    if (!questionsResult?.questions || questionsResult.questions.length !== 6) {
+    if (!questionsResult?.questions || questionsResult.questions.length === 0) {
       return res.status(500).json({
         success: false,
         message: 'AI temporarily unavailable. Please retry later.'

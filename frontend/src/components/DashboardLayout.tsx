@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Home, FileText, Users } from 'lucide-react';
+import { LogOut, Home, Users, BookOpen, FlaskConical, BarChart3, UserCircle } from 'lucide-react';
 
 export default function DashboardLayout() {
   const { user, logout } = useAuth();
@@ -60,17 +60,59 @@ export default function DashboardLayout() {
               </p>
               <nav className="space-y-2">
                 {isCandidate && (
-                  <Link
-                    to="/candidate/dashboard"
-                    className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium ${
-                      location.pathname === '/candidate/dashboard'
-                        ? 'bg-blue-600 text-white shadow-sm'
-                        : 'text-slate-600 hover:bg-slate-100'
-                    }`}
-                  >
-                    <Home size={18} />
-                    Dashboard
-                  </Link>
+                  <>
+                    <Link
+                      to="/candidate/dashboard"
+                      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium ${
+                        location.pathname === '/candidate/dashboard'
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <Home size={18} />
+                      Dashboard
+                    </Link>
+                    <Link
+                      to="/candidate/practice"
+                      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium ${
+                        location.pathname.startsWith('/candidate/practice')
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <BookOpen size={18} />
+                      Practice
+                    </Link>
+                    <Link
+                      to="/candidate/mock/setup"
+                      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium ${
+                        location.pathname.startsWith('/candidate/mock')
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <FlaskConical size={18} />
+                      Mock Interview
+                    </Link>
+                    <Link
+                      to="/candidate/analytics"
+                      className={`flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium ${
+                        location.pathname.startsWith('/candidate/analytics')
+                          ? 'bg-blue-600 text-white shadow-sm'
+                          : 'text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <BarChart3 size={18} />
+                      Analytics
+                    </Link>
+                    <Link
+                      to="/candidate/dashboard"
+                      className="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100"
+                    >
+                      <UserCircle size={18} />
+                      Profile
+                    </Link>
+                  </>
                 )}
                 {isRecruiter && (
                   <Link
