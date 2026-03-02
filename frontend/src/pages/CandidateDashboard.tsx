@@ -1,12 +1,47 @@
-import { useState, useEffect } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resumeAPI, interviewAPI, Interview, Resume } from '../services/api';
-import { Upload, FileText, Trash2, Play, AlertCircle } from 'lucide-react';
+import { Upload, FileText, Trash2, Play, AlertCircle, Link2 } from 'lucide-react';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
 import Skeleton from '../components/Skeleton';
-import SkillAnalyticsDashboard from '../components/SkillAnalyticsDashboard';
 import { validateFile, formatFileSize } from '../utils/fileValidation';
+import {
+  AnimatedCard,
+  AnimatedProgressBar,
+  AnimatedTooltip,
+  CountUpNumber,
+  GlowBadge,
+  MicroButton,
+  PulseIndicator,
+  StaggerContainer,
+} from '../components/motion';
+
+const SkillAnalyticsDashboard = lazy(() => import('../components/SkillAnalyticsDashboard'));
+
+function InterviewSparkline({ value }: { value: number }) {
+  const width = 90;
+  const height = 28;
+  const peak = 10;
+  const normalized = Math.max(0.6, Math.min(9.5, value));
+  const points = [
+    [0, 22],
+    [16, 20],
+    [32, 16],
+    [48, 18],
+    [64, Math.max(5, 24 - normalized * (20 / peak))],
+    [80, 10],
+  ];
+
+  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ');
+
+  return (
+    <svg width={width} height={height} viewBox="0 0 90 28" className="overflow-visible">
+      <path d={path} fill="none" stroke="#3BA2FF" strokeWidth="2" strokeDasharray="220" className="animate-line-draw" />
+      <circle cx="80" cy="10" r="2" fill="#39D4AA" className="animate-soft-pulse" />
+    </svg>
+  );
+}
 
 export default function CandidateDashboard() {
   const [resume, setResume] = useState<Resume | null>(null);
@@ -20,6 +55,11 @@ export default function CandidateDashboard() {
   useEffect(() => {
     loadDashboard();
   }, []);
+
+  const completedInterviews = useMemo(
+    () => interviews.filter((interview) => interview.status === 'completed'),
+    [interviews]
+  );
 
   const loadDashboard = async () => {
     try {
@@ -43,7 +83,6 @@ export default function CandidateDashboard() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    // Validate file before upload
     const validation = validateFile(file);
     if (!validation.valid) {
       setUploadError(validation.error || 'Invalid file');
@@ -58,14 +97,13 @@ export default function CandidateDashboard() {
 
       const uploadedResume = await resumeAPI.upload(file);
       setResume(uploadedResume);
-      setRetryCount(0); // Reset retry count on success
+      setRetryCount(0);
       toast.success('Resume uploaded successfully!');
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || error.message || 'Failed to upload resume';
       setUploadError(errorMessage);
       console.error('Resume upload error:', error);
 
-      // Determine if error is retryable
       const isNetworkError = error.message && error.message.includes('timeout');
       const is5xxError = error.response?.status >= 500;
       const isRetryable = isNetworkError || is5xxError;
@@ -74,7 +112,6 @@ export default function CandidateDashboard() {
         toast.error(`${errorMessage}. Retrying...`);
         setTimeout(() => {
           setRetryCount((prev) => prev + 1);
-          // Retry upload after a delay
           handleFileUpload(e);
         }, 2000);
       } else {
@@ -88,7 +125,6 @@ export default function CandidateDashboard() {
   const handleRetryUpload = () => {
     setUploadError(null);
     setRetryCount(0);
-    // Trigger file input again
     const input = document.getElementById('resume-file-input') as HTMLInputElement;
     if (input) {
       input.click();
@@ -114,19 +150,19 @@ export default function CandidateDashboard() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="mx-auto max-w-6xl space-y-6">
         <div className="space-y-2">
           <Skeleton className="h-8 w-56" />
           <Skeleton className="h-4 w-72" />
         </div>
         <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
           <div className="space-y-6">
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+            <div className="convio-glass p-6">
               <Skeleton className="h-6 w-40" />
               <Skeleton className="mt-4 h-24 w-full" />
               <Skeleton className="mt-4 h-10 w-40" />
             </div>
-            <div className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+            <div className="convio-glass p-6">
               <Skeleton className="h-6 w-40" />
               <div className="mt-4 space-y-3">
                 <Skeleton className="h-16 w-full" />
@@ -134,7 +170,7 @@ export default function CandidateDashboard() {
               </div>
             </div>
           </div>
-          <div className="rounded-2xl border border-white/60 bg-white/70 p-6 shadow-sm">
+          <div className="convio-glass p-6">
             <Skeleton className="h-6 w-40" />
             <Skeleton className="mt-4 h-40 w-full" />
           </div>
@@ -143,264 +179,245 @@ export default function CandidateDashboard() {
     );
   }
 
+  const topSkills = resume?.structuredData?.skills?.slice(0, 8) || [];
+
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-3xl font-bold text-slate-900">Welcome back</h1>
-        <p className="text-slate-600 mt-1">Your interview workspace is ready. Keep your resume updated and continue where you left off.</p>
-      </div>
+    <div className="mx-auto max-w-6xl space-y-8">
+      <section>
+        <h1 className="text-3xl font-bold text-zinc-900">Candidate Command Center</h1>
+        <p className="mt-1 text-zinc-600">
+          Track readiness, AI confidence, and interview outcomes from one adaptive workspace.
+        </p>
+      </section>
 
-      {/* Resume Section */}
-      <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-xl font-semibold flex items-center gap-2 text-slate-900">
-            <FileText size={24} />
-            Resume Profile
-          </h2>
-          {resume && (
-            <button
-              onClick={() => {
-                const confirmed = window.confirm('Remove this resume? You can upload a new one anytime.');
-                if (!confirmed) {
-                  return;
-                }
-                setResume(null);
-                toast.info('Resume removed. Upload an updated version when ready.');
-              }}
-              className="text-rose-600 hover:text-rose-700 flex items-center gap-1"
-            >
-              <Trash2 size={16} />
-              Remove
-            </button>
-          )}
-        </div>
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <AnimatedCard className="p-6" glowOnHover>
+          <div className="mb-5 flex items-center justify-between gap-3">
+            <h2 className="flex items-center gap-2 text-xl font-semibold text-zinc-900">
+              <FileText size={22} className="text-teal-600" />
+              Resume Intelligence
+            </h2>
+            {resume && (
+              <button
+                onClick={() => {
+                  const confirmed = window.confirm('Remove this resume? You can upload a new one anytime.');
+                  if (!confirmed) {
+                    return;
+                  }
+                  setResume(null);
+                  toast.info('Resume removed. Upload an updated version when ready.');
+                }}
+                className="inline-flex items-center gap-1 text-sm text-rose-600 transition-colors hover:text-rose-700"
+              >
+                <Trash2 size={15} />
+                Remove
+              </button>
+            )}
+          </div>
 
-        {resume ? (
-          <div className="space-y-4">
-            {/* Resume File Info */}
-            <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4">
-              <div className="flex items-start gap-3">
-                <FileText className="text-emerald-600 mt-1" size={24} />
-                <div className="flex-1">
-                  <h3 className="font-medium text-slate-900">{resume.fileName}</h3>
-                  <p className="text-sm text-slate-600 mt-1">
-                    Uploaded on {new Date(resume.createdAt).toLocaleDateString()}
-                  </p>
+          {resume ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/80 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="font-semibold text-zinc-900">{resume.fileName}</h3>
+                    <p className="mt-1 text-sm text-zinc-600">Uploaded on {new Date(resume.createdAt).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {resume.aiValidated && (
+                      <>
+                        <PulseIndicator label="AI Verified" />
+                        <GlowBadge label="validated" />
+                      </>
+                    )}
+                  </div>
                 </div>
                 {resume.aiValidated && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-semibold uppercase tracking-wide text-emerald-600">Validated</span>
-                    <span className="text-xs text-emerald-600 bg-emerald-100 px-2 py-1 rounded">
-                      {Math.round(resume.aiConfidence * 100)}% confidence
-                    </span>
+                  <p className="mt-3 text-sm text-zinc-700">
+                    Confidence: <CountUpNumber value={Math.round(resume.aiConfidence * 100)} suffix="%" className="font-semibold text-zinc-900" />
+                  </p>
+                )}
+              </div>
+
+              {resume.structuredData && (
+                <div className="rounded-xl border border-cyan-200/70 bg-cyan-50/60 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700">Primary Domain</p>
+                      <p className="convio-link-line mt-1 inline-flex text-sm font-semibold text-cyan-950">
+                        {resume.structuredData.primaryDomain || 'General'}
+                      </p>
+                    </div>
+                    {resume.structuredData.experienceYears > 0 && (
+                      <div className="text-right">
+                        <p className="text-xs text-cyan-700">Experience</p>
+                        <p className="text-sm font-semibold text-cyan-950">{resume.structuredData.experienceYears} years</p>
+                      </div>
+                    )}
                   </div>
-                )}
-              </div>
+
+                  <div className="my-3 flex items-center gap-2 text-cyan-600">
+                    <Link2 size={14} />
+                    <div className="h-px flex-1 bg-gradient-to-r from-cyan-400 via-teal-500 to-cyan-400" />
+                    <span className="text-[10px] uppercase tracking-[0.2em]">Domain to Skills</span>
+                  </div>
+
+                  <StaggerContainer className="flex flex-wrap gap-2" delayStepMs={70}>
+                    {topSkills.map((skill) => (
+                      <span key={skill} className="rounded-full border border-white bg-white px-3 py-1 text-xs font-medium text-cyan-800">
+                        {skill}
+                      </span>
+                    ))}
+                  </StaggerContainer>
+                </div>
+              )}
             </div>
-
-            {/* Resume Intelligence */}
-            {resume.structuredData && (
-              <div className="bg-blue-50 border border-blue-200 rounded-xl p-4">
-                <h4 className="text-sm font-semibold text-blue-900 mb-3">Resume Intelligence</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Primary Domain */}
-                  {resume.structuredData.primaryDomain && (
-                    <div>
-                      <p className="text-xs text-blue-600 font-medium mb-1">Primary Domain</p>
-                      <p className="text-sm text-blue-900 font-semibold">
-                        {resume.structuredData.primaryDomain}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Experience Years */}
-                  {resume.structuredData.experienceYears > 0 && (
-                    <div>
-                      <p className="text-xs text-blue-600 font-medium mb-1">Experience</p>
-                      <p className="text-sm text-blue-900 font-semibold">
-                        {resume.structuredData.experienceYears} {resume.structuredData.experienceYears === 1 ? 'year' : 'years'}
-                      </p>
-                    </div>
-                  )}
-
-                  {/* Top Skills */}
-                  {resume.structuredData.skills && resume.structuredData.skills.length > 0 && (
-                    <div className="col-span-1 md:col-span-2">
-                      <p className="text-xs text-blue-600 font-medium mb-2">Top Skills</p>
-                      <div className="flex flex-wrap gap-2">
-                        {resume.structuredData.skills.slice(0, 6).map((skill: string, index: number) => (
-                          <span
-                            key={index}
-                            className="px-3 py-1 bg-white text-blue-700 text-xs rounded-full border border-blue-200 font-medium"
-                          >
-                            {skill}
-                          </span>
-                        ))}
-                        {resume.structuredData.skills.length > 6 && (
-                          <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs rounded-full font-medium">
-                            +{resume.structuredData.skills.length - 6} more
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Technologies */}
-                  {resume.structuredData.technologies && resume.structuredData.technologies.length > 0 && (
-                    <div className="col-span-1 md:col-span-2">
-                      <p className="text-xs text-blue-600 font-medium mb-2">Technologies</p>
-                      <div className="flex flex-wrap gap-2">
-                        {resume.structuredData.technologies.slice(0, 6).map((tech: string, index: number) => (
-                          <span
-                            key={index}
-                            className="px-3 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full font-medium"
-                          >
-                            {tech}
-                          </span>
-                        ))}
-                        {resume.structuredData.technologies.length > 6 && (
-                          <span className="px-3 py-1 bg-indigo-200 text-indigo-800 text-xs rounded-full font-medium">
-                            +{resume.structuredData.technologies.length - 6} more
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  )}
+          ) : (
+            <div className="rounded-xl border border-dashed border-zinc-300 p-8 text-center">
+              {uploadError && (
+                <div className="mb-4 flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-left">
+                  <AlertCircle className="mt-0.5 flex-shrink-0 text-rose-600" size={18} />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium text-rose-900">{uploadError}</p>
+                    <button
+                      onClick={handleRetryUpload}
+                      className="mt-2 text-sm font-medium text-rose-700 underline hover:text-rose-800"
+                    >
+                      Try again
+                    </button>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+
+              <Upload className="mx-auto mb-4 text-zinc-400" size={44} />
+              <h3 className="text-lg font-medium text-zinc-900">Upload a resume to personalize interviews</h3>
+              <p className="mb-4 mt-2 text-zinc-600">PDF only, max 5MB.</p>
+              <label className="cursor-pointer">
+                <input
+                  id="resume-file-input"
+                  type="file"
+                  accept=".pdf"
+                  onChange={handleFileUpload}
+                  className="hidden"
+                  disabled={uploading}
+                />
+                <span className="inline-flex rounded-xl bg-zinc-900 px-6 py-2 text-white transition-colors hover:bg-zinc-800">
+                  {uploading ? (
+                    <span className="flex items-center gap-2">
+                      <Spinner size="sm" />
+                      {retryCount > 0 ? `Retrying (${retryCount})...` : 'Uploading...'}
+                    </span>
+                  ) : (
+                    'Choose File'
+                  )}
+                </span>
+              </label>
+            </div>
+          )}
+        </AnimatedCard>
+
+        <AnimatedCard className="convio-mesh-bg relative overflow-hidden p-6 text-white" glowOnHover>
+          <div className="pointer-events-none absolute inset-0 rounded-[inherit] border border-white/25" />
+          <div className="pointer-events-none absolute inset-[1px] rounded-[inherit] border border-transparent bg-[linear-gradient(120deg,rgba(255,255,255,0.25),transparent_45%,rgba(255,255,255,0.25))] opacity-70" />
+          <div className="relative z-10">
+            <p className="text-xs uppercase tracking-[0.2em] text-teal-100">Interview Session</p>
+            <h2 className="mt-2 text-2xl font-semibold">Ready for the next round?</h2>
+            <p className="mt-2 max-w-sm text-sm text-zinc-100/90">
+              Launch a timed session with adaptive difficulty and AI evaluation. Progress is auto-saved.
+            </p>
+            <MicroButton
+              onClick={startNewInterview}
+              disabled={!resume}
+              glow
+              className="mt-6 bg-white text-zinc-900 disabled:bg-zinc-300 disabled:text-zinc-500"
+            >
+              <Play size={18} />
+              Start New Interview
+            </MicroButton>
           </div>
-        ) : (
-          <div className="border border-dashed border-slate-300 rounded-xl p-8 text-center bg-white/60">
-            {uploadError && (
-              <div className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 flex items-start gap-3">
-                <AlertCircle className="text-rose-600 flex-shrink-0 mt-0.5" size={18} />
-                <div className="flex-1 text-left">
-                  <p className="text-sm font-medium text-rose-900">{uploadError}</p>
-                  <button
-                    onClick={handleRetryUpload}
-                    className="mt-2 text-sm font-medium text-rose-700 hover:text-rose-800 underline"
-                  >
-                    Try again
-                  </button>
-                </div>
-              </div>
-            )}
-            <Upload className="mx-auto text-slate-400 mb-4" size={48} />
-            <h3 className="text-lg font-medium text-slate-900 mb-2">Upload a resume to personalize interviews</h3>
-            <p className="text-slate-600 mb-4">PDF only, max 5MB. We use it to tune the questions and evaluation.</p>
-            <label className="cursor-pointer">
-              <input
-                id="resume-file-input"
-                type="file"
-                accept=".pdf"
-                onChange={handleFileUpload}
-                className="hidden"
-                disabled={uploading}
-              />
-              <span className="inline-block bg-slate-900 text-white px-6 py-2 rounded-lg hover:bg-slate-800 transition-colors disabled:bg-gray-400">
-                {uploading ? (
-                  <span className="flex items-center gap-2">
-                    <Spinner size="sm" />
-                    {retryCount > 0 ? `Retrying (${retryCount})...` : 'Uploading...'}
-                  </span>
-                ) : (
-                  'Choose File'
-                )}
-              </span>
-            </label>
-          </div>
-        )}
+        </AnimatedCard>
       </div>
 
-      {/* Start Interview Button */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl shadow-lg border border-slate-800 p-6 text-white">
-        <h2 className="text-xl font-semibold mb-2">Ready for the next round?</h2>
-        <p className="text-slate-200 mb-4">
-          Launch a timed interview session with AI evaluation. Your progress is saved automatically.
-        </p>
-        <button
-          onClick={startNewInterview}
-          disabled={!resume}
-          className="bg-white text-slate-900 px-6 py-3 rounded-lg hover:bg-slate-100 transition-colors disabled:bg-slate-400 disabled:text-white disabled:cursor-not-allowed flex items-center gap-2 font-medium"
-        >
-          <Play size={20} />
-          Start New Interview
-        </button>
-      </div>
-
-      {/* Performance Analytics */}
-      {interviews.filter((i) => i.status === 'completed').length > 0 && (
-        <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
-          <h2 className="text-xl font-semibold mb-4 text-slate-900">Performance Analytics</h2>
-          <SkillAnalyticsDashboard interviews={interviews} />
-        </div>
+      {completedInterviews.length > 0 && (
+        <AnimatedCard className="p-6">
+          <div className="mb-4 flex items-center justify-between">
+            <h2 className="text-xl font-semibold text-zinc-900">Performance Analytics</h2>
+            <PulseIndicator label="Live Insights" />
+          </div>
+          <Suspense fallback={<Skeleton className="h-52 w-full" />}>
+            <SkillAnalyticsDashboard interviews={interviews} />
+          </Suspense>
+        </AnimatedCard>
       )}
 
-      {/* Interview History */}
-      <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
-        <h2 className="text-xl font-semibold mb-4 text-slate-900">Your Interviews</h2>
+      <AnimatedCard className="p-6">
+        <h2 className="mb-4 text-xl font-semibold text-zinc-900">Interview History</h2>
 
         {interviews.length === 0 ? (
-          <div className="text-center py-10">
-            <p className="text-slate-700 text-lg font-medium">No interviews yet</p>
-            <p className="text-slate-500 mt-2">Kick off a new session to see AI feedback instantly.</p>
+          <div className="py-10 text-center">
+            <p className="text-lg font-medium text-zinc-700">No interviews yet</p>
+            <p className="mt-2 text-zinc-500">Kick off a new session to see AI feedback instantly.</p>
           </div>
         ) : (
-          <div className="space-y-3">
-            {interviews.map((interview) => (
-              <div
-                key={interview._id}
-                className="border border-slate-200 rounded-xl p-4 hover:shadow-md transition-shadow cursor-pointer bg-white/70"
-                onClick={() => {
-                  if (interview.status === 'in-progress') {
-                    navigate(`/candidate/interview/${interview._id}`);
-                  } else {
-                    navigate(`/candidate/results/${interview._id}`);
+          <StaggerContainer className="space-y-3" delayStepMs={90}>
+            {interviews.map((interview) => {
+              const completed = interview.status === 'completed';
+              const score = Math.min(100, interview.averageScore * 10);
+
+              return (
+                <AnimatedCard
+                  key={interview._id}
+                  className="group cursor-pointer border border-zinc-200/70 bg-white/75 p-4"
+                  onClick={() =>
+                    navigate(completed ? `/candidate/results/${interview._id}` : `/candidate/interview/${interview._id}`)
                   }
-                }}
-              >
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wide ${
-                          interview.status === 'completed'
-                            ? 'bg-emerald-100 text-emerald-700'
-                            : 'bg-amber-100 text-amber-700'
-                        }`}
-                      >
-                        {interview.status === 'completed' ? 'Completed' : 'In Progress'}
-                      </span>
-                      <span className="text-slate-600 text-sm">
-                        {new Date(interview.createdAt).toLocaleDateString()}
-                      </span>
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <span
+                          className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
+                            completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                          }`}
+                        >
+                          {completed ? 'Completed' : 'In Progress'}
+                        </span>
+                        <span className="text-sm text-zinc-600">{new Date(interview.createdAt).toLocaleDateString()}</span>
+                        {completed && (
+                          <AnimatedTooltip content="Score trajectory">
+                            <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] text-zinc-600">Sparkline</span>
+                          </AnimatedTooltip>
+                        )}
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-3">
+                        <p className="text-sm text-zinc-700">
+                          {interview.answers.length} / {interview.questions.length} questions answered
+                        </p>
+                        {completed && <InterviewSparkline value={interview.averageScore} />}
+                      </div>
                     </div>
-                    <p className="text-slate-600 mt-2">
-                      {interview.answers.length} / {interview.questions.length} questions answered
-                    </p>
+
+                    {completed && (
+                      <div className="min-w-[146px] text-right">
+                        <p className="text-2xl font-bold text-zinc-900">
+                          <CountUpNumber value={interview.averageScore} decimals={1} />
+                        </p>
+                        <p className="mb-2 text-xs text-zinc-500">Avg Score</p>
+                        <AnimatedProgressBar value={score} max={100} showGlowTrail />
+                      </div>
+                    )}
                   </div>
-                  {interview.status === 'completed' && (
-                    <div className="text-right min-w-[120px]">
-                      <div className="text-2xl font-bold text-slate-900">
-                        {interview.averageScore.toFixed(1)}
-                      </div>
-                      <p className="text-sm text-slate-500">Avg Score</p>
-                      <div className="mt-2 h-2 rounded-full bg-slate-100">
-                        <div
-                          className="h-2 rounded-full bg-emerald-500"
-                          style={{ width: `${Math.min(100, interview.averageScore * 10)}%` }}
-                        />
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+
+                  <div className="mt-2 hidden text-xs text-zinc-500 group-hover:block animate-fade-up">
+                    Click to open full question-level feedback and adaptive trend details.
+                  </div>
+                </AnimatedCard>
+              );
+            })}
+          </StaggerContainer>
         )}
-      </div>
+      </AnimatedCard>
     </div>
   );
 }

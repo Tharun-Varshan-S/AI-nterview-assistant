@@ -1,15 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import Editor from '@monaco-editor/react';
+import { CheckCircle2, Sparkles } from 'lucide-react';
+import { GlowBadge, MicroButton, PulseIndicator } from './motion';
 
-/**
- * CodingQuestionComponent
- * 
- * Handles coding interview questions with:
- * - Language selection (JavaScript, Python, Java, C++)
- * - Monaco editor for code writing
- * - Auto-save functionality
- * - Code submission
- */
 type SupportedLanguage = 'javascript' | 'python' | 'java' | 'cpp';
 
 interface CodingSubmitPayload {
@@ -26,26 +19,11 @@ interface CodingQuestionComponentProps {
   onCodeChange?: (code: string, language: SupportedLanguage) => void;
   onMetricsChange?: (metrics: { editCount: number; typingDurationMs: number }) => void;
   isSubmitting?: boolean;
+  difficultyShift?: 'increased' | 'decreased' | null;
 }
 
-const CodingQuestionComponent = ({
-  question,
-  questionIndex,
-  onSubmit,
-  onCodeChange,
-  onMetricsChange,
-  isSubmitting = false
-}: CodingQuestionComponentProps) => {
-  const [code, setCode] = useState('');
-  const [language, setLanguage] = useState<SupportedLanguage>('javascript');
-  const [showOutput, setShowOutput] = useState(false);
-  const [savedAt, setSavedAt] = useState<Date | null>(null);
-  const [editCount, setEditCount] = useState(0);
-  const [typingStartedAt, setTypingStartedAt] = useState<number | null>(null);
-
-  // Language templates
-  const templates: Record<SupportedLanguage, string> = {
-    javascript: `// Write your JavaScript solution here
+const templates: Record<SupportedLanguage, string> = {
+  javascript: `// Write your JavaScript solution here
 function solve() {
   // Your code here
   return result;
@@ -53,7 +31,7 @@ function solve() {
 
 // Test your code
 console.log(solve());`,
-    python: `# Write your Python solution here
+  python: `# Write your Python solution here
 def solve():
     # Your code here
     return result
@@ -61,7 +39,7 @@ def solve():
 # Test your code
 if __name__ == "__main__":
     print(solve())`,
-    java: `// Write your Java solution here
+  java: `// Write your Java solution here
 public class Solution {
     public void solve() {
         // Your code here
@@ -71,37 +49,57 @@ public class Solution {
         new Solution().solve();
     }
 }`,
-    cpp: `// Write your C++ solution here
+  cpp: `// Write your C++ solution here
 #include <iostream>
 using namespace std;
 
 int main() {
     // Your code here
     return 0;
-}`
-  };
+}`,
+};
 
-  // Initialize with template
+const CodingQuestionComponent = ({
+  question,
+  questionIndex,
+  onSubmit,
+  onCodeChange,
+  onMetricsChange,
+  isSubmitting = false,
+  difficultyShift,
+}: CodingQuestionComponentProps) => {
+  const [code, setCode] = useState('');
+  const [language, setLanguage] = useState<SupportedLanguage>('javascript');
+  const [showTips, setShowTips] = useState(false);
+  const [savedAt, setSavedAt] = useState<Date | null>(null);
+  const [editCount, setEditCount] = useState(0);
+  const [typingStartedAt, setTypingStartedAt] = useState<number | null>(null);
+  const [flashEditor, setFlashEditor] = useState(false);
+
+  const saveLabel = useMemo(() => {
+    if (!savedAt) return 'Auto-save pending';
+    return `Saved ${savedAt.toLocaleTimeString()}`;
+  }, [savedAt]);
+
   useEffect(() => {
     const nextCode = templates[language] || templates.javascript;
     setCode(nextCode);
     setEditCount(0);
     setTypingStartedAt(null);
+    setFlashEditor(true);
+    window.setTimeout(() => setFlashEditor(false), 380);
     onMetricsChange?.({ editCount: 0, typingDurationMs: 0 });
-    if (onCodeChange) {
-      onCodeChange(nextCode, language);
-    }
+    onCodeChange?.(nextCode, language);
   }, [language, onCodeChange, onMetricsChange]);
 
-  // Auto-save to local storage
   useEffect(() => {
     const timer = setTimeout(() => {
       localStorage.setItem(
         `coding_answer_${questionIndex}`,
-        JSON.stringify({ code, language, timestamp: new Date() })
+        JSON.stringify({ code, language, timestamp: new Date().toISOString() })
       );
       setSavedAt(new Date());
-    }, 2000);
+    }, 1800);
 
     return () => clearTimeout(timer);
   }, [code, language, questionIndex]);
@@ -109,10 +107,9 @@ int main() {
   const handleLanguageChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newLanguage = e.target.value as SupportedLanguage;
     setLanguage(newLanguage);
-    setCode(templates[newLanguage] || '');
-    if (onCodeChange) {
-      onCodeChange(templates[newLanguage] || '', newLanguage);
-    }
+    const template = templates[newLanguage] || '';
+    setCode(template);
+    onCodeChange?.(template, newLanguage);
   };
 
   const handleSubmit = () => {
@@ -125,29 +122,33 @@ int main() {
       code,
       language,
       questionIndex,
-      question
+      question,
     });
   };
 
   return (
-    <div className="coding-question-container p-6 bg-gray-50 rounded-lg">
-      {/* Question Display */}
-      <div className="mb-6">
-        <h3 className="text-lg font-semibold text-gray-800 mb-2">
-          Question {questionIndex + 1}
-        </h3>
-        <p className="text-gray-700 whitespace-pre-wrap">{question}</p>
+    <div className="rounded-xl border border-zinc-200 bg-zinc-50/75 p-5">
+      <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h3 className="text-lg font-semibold text-zinc-900">Coding Question {questionIndex + 1}</h3>
+          <p className="mt-1 whitespace-pre-wrap text-sm text-zinc-700">{question}</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <PulseIndicator label="Auto-save" />
+          {difficultyShift && (
+            <GlowBadge label={difficultyShift === 'increased' ? 'difficulty up' : 'difficulty down'} />
+          )}
+        </div>
       </div>
 
-      {/* Language Selector */}
-      <div className="mb-4 flex items-center justify-between">
-        <label className="block text-sm font-medium text-gray-700">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <label className="text-sm font-medium text-zinc-700">
           Language:
           <select
             value={language}
             onChange={handleLanguageChange}
             disabled={isSubmitting}
-            className="ml-2 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500"
+            className="ml-2 rounded-lg border border-zinc-300 bg-white px-3 py-2 shadow-sm focus:border-cyan-400 focus:outline-none"
           >
             <option value="javascript">JavaScript</option>
             <option value="python">Python</option>
@@ -156,13 +157,18 @@ int main() {
           </select>
         </label>
 
-        <div className="text-sm text-gray-500">
-          {savedAt ? `Auto-saved at ${savedAt.toLocaleTimeString()}` : ''}
+        <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600">
+          <span className="h-2 w-2 rounded-full bg-emerald-500 animate-soft-pulse" />
+          {saveLabel}
         </div>
       </div>
 
-      {/* Monaco Editor */}
-      <div className="mb-6 border border-gray-300 rounded-lg overflow-hidden" style={{ height: '400px' }}>
+      <div
+        className={`mb-5 overflow-hidden rounded-xl border border-zinc-300 ${
+          flashEditor ? 'ring-2 ring-cyan-300/60 transition duration-300' : ''
+        }`}
+        style={{ height: '400px' }}
+      >
         <Editor
           height="100%"
           language={language}
@@ -176,11 +182,9 @@ int main() {
             const nextEditCount = editCount + 1;
             setEditCount(nextEditCount);
             setCode(nextCode);
-            const typingDurationMs = (typingStartedAt ?? now) ? now - (typingStartedAt ?? now) : 0;
+            const typingDurationMs = now - (typingStartedAt ?? now);
             onMetricsChange?.({ editCount: nextEditCount, typingDurationMs });
-            if (onCodeChange) {
-              onCodeChange(nextCode, language);
-            }
+            onCodeChange?.(nextCode, language);
           }}
           theme="vs-light"
           options={{
@@ -189,39 +193,47 @@ int main() {
             lineNumbers: 'on',
             wordWrap: 'on',
             automaticLayout: true,
-            scrollBeyondLastLine: false
+            scrollBeyondLastLine: false,
           }}
         />
       </div>
 
-      {/* Submit Button */}
-      <div className="flex gap-4">
-        <button
+      <div className="flex flex-wrap gap-3">
+        <MicroButton
           onClick={handleSubmit}
           disabled={isSubmitting || !code.trim()}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition"
+          className="bg-zinc-900 text-white disabled:bg-zinc-400"
+          glow
         >
-          {isSubmitting ? 'Submitting...' : 'Submit Code'}
-        </button>
+          {isSubmitting ? (
+            <>
+              <Sparkles size={16} className="animate-soft-pulse" />
+              Submitting...
+            </>
+          ) : (
+            <>
+              <CheckCircle2 size={16} />
+              Submit Code
+            </>
+          )}
+        </MicroButton>
 
-        <button
-          onClick={() => setShowOutput(!showOutput)}
-          className="px-6 py-2 border border-gray-300 text-gray-700 rounded-lg font-medium hover:bg-gray-50 transition"
+        <MicroButton
+          onClick={() => setShowTips((prev) => !prev)}
+          className="border border-zinc-300 bg-white text-zinc-700"
         >
-          {showOutput ? 'Hide' : 'Show'} Code Tips
-        </button>
+          {showTips ? 'Hide Tips' : 'Show Tips'}
+        </MicroButton>
       </div>
 
-      {/* Code Tips */}
-      {showOutput && (
-        <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <h4 className="font-semibold text-blue-900 mb-2">Code Writing Tips:</h4>
-          <ul className="list-disc list-inside text-sm text-blue-800 space-y-1">
-            <li>Think about edge cases (empty input, negative numbers, etc.)</li>
-            <li>Write clean, readable code with proper indentation</li>
-            <li>Add comments to explain your approach</li>
-            <li>Consider time and space complexity</li>
-            <li>Test your logic with sample inputs before submitting</li>
+      {showTips && (
+        <div className="mt-4 animate-fade-up rounded-lg border border-cyan-200 bg-cyan-50 p-4">
+          <h4 className="mb-2 text-sm font-semibold text-cyan-900">Code Writing Tips</h4>
+          <ul className="space-y-1 text-sm text-cyan-800">
+            <li>Think through edge cases before coding.</li>
+            <li>Use clear naming and readable structure.</li>
+            <li>Describe complexity briefly in comments.</li>
+            <li>Validate with sample inputs before submit.</li>
           </ul>
         </div>
       )}

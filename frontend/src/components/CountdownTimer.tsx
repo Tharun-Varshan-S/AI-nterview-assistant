@@ -1,5 +1,4 @@
-import { useEffect, useState } from 'react';
-import { Clock } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 
 interface CountdownTimerProps {
   seconds: number;
@@ -32,21 +31,60 @@ export default function CountdownTimer({ seconds, onTimeout }: CountdownTimerPro
     return () => clearInterval(timer);
   }, [timeLeft, onTimeout]);
 
+  const ratio = timeLeft / seconds;
   const minutes = Math.floor(timeLeft / 60);
-  const seconds_remaining = timeLeft % 60;
-  const percentage = (timeLeft / seconds) * 100;
+  const secondsRemaining = timeLeft % 60;
 
-  const getColorClass = () => {
-    if (percentage > 50) return 'text-green-600';
-    if (percentage > 25) return 'text-yellow-600';
-    return 'text-red-600 animate-pulse';
-  };
+  const tone = useMemo(() => {
+    if (ratio > 0.5) {
+      return {
+        text: 'text-emerald-700',
+        ring: '#10B981',
+        bg: 'bg-emerald-50',
+      };
+    }
+    if (ratio > 0.2) {
+      return {
+        text: 'text-amber-700',
+        ring: '#F59E0B',
+        bg: 'bg-amber-50',
+      };
+    }
+    return {
+      text: 'text-rose-700',
+      ring: '#F43F5E',
+      bg: 'bg-rose-50',
+    };
+  }, [ratio]);
+
+  const radius = 18;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - Math.max(0, Math.min(1, ratio)));
 
   return (
-    <div className="flex items-center gap-2">
-      <Clock className={getColorClass()} size={20} />
-      <span className={`font-mono text-lg font-semibold ${getColorClass()}`}>
-        {minutes.toString().padStart(2, '0')}:{seconds_remaining.toString().padStart(2, '0')}
+    <div className={`inline-flex items-center gap-2 rounded-full border border-zinc-200 px-2.5 py-1.5 ${tone.bg} ${timeLeft <= 10 ? 'animate-soft-pulse' : ''}`}>
+      <div className={`relative ${timeLeft <= 10 ? 'animate-[shake_450ms_ease-in-out_infinite]' : ''}`}>
+        <svg width="42" height="42" viewBox="0 0 42 42" className="-rotate-90">
+          <circle cx="21" cy="21" r={radius} stroke="#E4E4E7" strokeWidth="3.5" fill="transparent" />
+          <circle
+            cx="21"
+            cy="21"
+            r={radius}
+            stroke={tone.ring}
+            strokeWidth="3.5"
+            fill="transparent"
+            strokeDasharray={circumference}
+            strokeDashoffset={dashOffset}
+            strokeLinecap="round"
+            className="transition-[stroke-dashoffset] duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)]"
+          />
+        </svg>
+        <span className={`absolute inset-0 grid place-items-center text-[10px] font-semibold ${tone.text}`}>
+          {Math.ceil(ratio * 100)}%
+        </span>
+      </div>
+      <span className={`font-mono text-base font-semibold ${tone.text}`}>
+        {minutes.toString().padStart(2, '0')}:{secondsRemaining.toString().padStart(2, '0')}
       </span>
     </div>
   );
