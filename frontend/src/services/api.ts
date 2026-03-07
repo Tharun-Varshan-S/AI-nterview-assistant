@@ -109,12 +109,19 @@ export interface Resume {
 export interface Question {
   id?: string;
   question: string;
+  type?: 'coding' | 'theoretical';
   difficulty: 'easy' | 'medium' | 'hard';
   topic?: string;
   domain?: string;
   timeLimit?: number;
   isCoding?: boolean;
   targetingWeakSkill?: boolean;
+  inputFormat?: string;
+  outputFormat?: string;
+  constraints?: string[];
+  examples?: Array<{ input: string; output: string; explanation?: string }>;
+  template?: string;
+  testCases?: Array<{ input: any[]; expectedOutput: any; description?: string }>;
 }
 
 export interface AIEvaluation {
@@ -292,6 +299,7 @@ export interface PracticeSession {
 
 export interface OverviewAnalytics {
   readinessScore: number;
+  readinessLevel?: 'Not Ready' | 'Improving' | 'Ready' | string;
   readinessPercentage: number;
   strongestSkill: string;
   weakestSkill: string;
@@ -387,6 +395,29 @@ export const interviewAPI = {
       success: boolean;
       data: SubmitAnswerResponse;
     }>(`/interview/${interviewId}/submit-answer`, answerData);
+    return data.data;
+  },
+
+  runCode: async (
+    interviewId: string,
+    payload: { questionIndex: number; code: string; language: string }
+  ) => {
+    const { data } = await api.post<{
+      success: boolean;
+      data: {
+        passed: boolean;
+        results: Array<{ input: string; expected: string; actual: string; passed: boolean; description?: string }>;
+        error: string | null;
+        output?: string;
+        complexity?: {
+          lines: number;
+          hasNestedLoops: boolean;
+          hasRecursion: boolean;
+          estimatedTimeComplexity: string;
+          estimatedSpaceComplexity: string;
+        };
+      };
+    }>(`/interview/${interviewId}/run-code`, payload);
     return data.data;
   },
 

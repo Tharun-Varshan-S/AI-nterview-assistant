@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { Toaster } from 'sonner';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -14,6 +14,11 @@ import PracticePage from './pages/PracticePage';
 import PracticeSessionPage from './pages/PracticeSessionPage';
 import MockSetupPage from './pages/MockSetupPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+
+function LegacyInterviewRedirect({ targetPrefix }: { targetPrefix: string }) {
+  const { id } = useParams<{ id: string }>();
+  return <Navigate to={`${targetPrefix}/${id || ''}`} replace />;
+}
 
 function App() {
   return (
@@ -58,6 +63,12 @@ function App() {
           </Route>
 
           {/* Default Route */}
+          <Route path="/dashboard" element={<Navigate to="/candidate/dashboard" replace />} />
+          <Route path="/practice" element={<Navigate to="/candidate/practice" replace />} />
+          <Route path="/mock/setup" element={<Navigate to="/candidate/mock/setup" replace />} />
+          <Route path="/mock/:id" element={<LegacyInterviewRedirect targetPrefix="/candidate/interview" />} />
+          <Route path="/analytics" element={<Navigate to="/candidate/analytics" replace />} />
+          <Route path="/interview/:id/results" element={<LegacyInterviewRedirect targetPrefix="/candidate/results" />} />
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
         </Routes>

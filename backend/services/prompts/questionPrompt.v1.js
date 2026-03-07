@@ -1,6 +1,6 @@
-const version = 'question.v1';
+const version = 'question.v2';
 
-const buildQuestionPrompt = ({ structuredData, rawText, focusTopics = [] }) => {
+const buildQuestionPrompt = ({ structuredData, rawText, focusTopics = [], interviewType = 'theoretical', questionCount = 6 }) => {
   let domainContext = '';
   if (structuredData) {
     const skills = structuredData.skills?.join(', ') || 'General';
@@ -11,6 +11,14 @@ const buildQuestionPrompt = ({ structuredData, rawText, focusTopics = [] }) => {
   }
 
   const focusTopicsText = focusTopics.length > 0 ? `Prioritize these topics: ${focusTopics.join(', ')}.` : '';
+  const safeCount = Number.isFinite(Number(questionCount)) ? Math.max(3, Math.min(10, Number(questionCount))) : 6;
+  const typeMode = ['theoretical', 'coding', 'mixed'].includes(interviewType) ? interviewType : 'theoretical';
+
+  const compositionRule = typeMode === 'coding'
+    ? '- ALL questions must be coding questions.\n- type must always be "coding".\n- isCoding must always be true.'
+    : typeMode === 'theoretical'
+      ? '- ALL questions must be conceptual/theoretical.\n- type must always be "theoretical".\n- isCoding must always be false.\n- testCases must be empty arrays.'
+      : '- Mixed mode: exactly 3 coding and 3 theoretical when questionCount is 6. If questionCount differs, keep ~50/50 split.\n- Coding questions use type="coding", theoretical use type="theoretical".';
 
   return `You are an AI Interview System. Generate adaptive interview questions with detailed metadata.
 
@@ -26,11 +34,19 @@ JSON STRUCTURE:
   "questions": [
     {
       "question": "string",
+      "type": "coding|theoretical",
       "difficulty": "easy|medium|hard",
       "topic": "string",
       "domain": "string",
       "timeLimit": number,
       "isCoding": boolean,
+      "inputFormat": "string",
+      "outputFormat": "string",
+      "constraints": ["string"],
+      "examples": [
+        { "input": "string", "output": "string", "explanation": "string" }
+      ],
+      "template": "string",
       "testCases": [
         { "input": ["any"], "expectedOutput": "any", "description": "string" }
       ]
@@ -39,14 +55,18 @@ JSON STRUCTURE:
 }
 
 REQUIREMENTS:
-- Generate exactly 6 questions.
-- Difficulty split: 2 easy, 2 medium, 2 hard.
+- Generate exactly ${safeCount} questions.
+- Difficulty split should be balanced across easy/medium/hard.
 - Each question must have a unique topic.
-- Keep each question under 35 words.
+- Keep each question under 80 words.
 - Keep topic under 4 words.
-- isCoding should be true for at most 2 questions.
-- For isCoding=true, include exactly 2 concise testCases.
-- For isCoding=false, return an empty testCases array.
+- ${compositionRule}
+- For coding questions:
+  - Provide problem statement, inputFormat, outputFormat, constraints, at least 1 example, template.
+  - Include 2-4 testCases with machine-readable input and expectedOutput.
+- For theoretical questions:
+  - inputFormat="", outputFormat="", constraints=[], examples=[], template="".
+  - testCases must be [].
 - Match candidate skills: ${structuredData?.skills?.join(', ') || 'General'}
 - ${focusTopicsText}
 

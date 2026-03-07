@@ -1,0 +1,325 @@
+================================================================================
+CONVIO UI UPGRADE - CODE STUDY GUIDE - PART 1: DESIGN SYSTEM
+================================================================================
+
+This document contains all the actual code created during the Convio UI upgrade.
+Study this to understand how to build premium SaaS dashboards with micro-interactions.
+
+================================================================================
+1. DESIGN SYSTEM - THEME TOKENS
+================================================================================
+
+FILE: src/design/theme.ts
+
+export const theme = {
+  color: {
+    neutral: {
+      950: '#09090B',
+      900: '#18181B',
+      800: '#27272A',
+      700: '#3F3F46',
+      600: '#52525B',
+      500: '#71717A',
+      400: '#A1A1AA',
+      300: '#D4D4D8',
+      200: '#E4E4E7',
+      100: '#F4F4F5',
+      50: '#FAFAFA',
+    },
+    primary: '#39D4AA',
+    secondary: '#3BA2FF',
+    success: '#10B981',
+    warning: '#F59E0B',
+    danger: '#F43F5E',
+  },
+  shadow: {
+    card: '0 8px 30px rgba(2, 6, 23, 0.08)',
+    cardHover: '0 14px 38px rgba(2, 6, 23, 0.14)',
+    glowPrimary: '0 0 0 1px rgba(57, 212, 170, 0.35), 0 10px 35px rgba(57, 212, 170, 0.24)',
+  },
+  radius: {
+    lg: '14px',
+    xl: '18px',
+    xxl: '22px',
+  },
+  motion: {
+    fast: '180ms',
+    normal: '260ms',
+    slow: '420ms',
+    curve: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+  },
+} as const;
+
+export type Theme = typeof theme;
+
+EXPLANATION:
+- Centralized color palette using Zinc/Slate neutrals
+- Teal primary (#39D4AA) for brand accent
+- Electric blue secondary for contrast
+- Consistent shadow system for elevation
+- Motion timing tokens for smooth animations
+- TypeScript const assertion for type safety
+
+================================================================================
+2. DESIGN SYSTEM - MOTION UTILITIES
+================================================================================
+
+FILE: src/design/motion.ts
+
+import { useEffect, useMemo, useState } from 'react';
+
+export const motionCurve = 'cubic-bezier(0.2, 0.8, 0.2, 1)';
+
+export const motionClasses = {
+  cardHover:
+    'transition-transform transition-shadow duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] hover:-translate-y-1 hover:scale-[1.01] hover:shadow-convio-card-hover',
+  fadeUp: 'animate-fade-up',
+  pulseLive: 'animate-soft-pulse',
+  glowActive: 'shadow-convio-glow',
+  shimmer: 'animate-shimmer',
+};
+
+export function useReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduced(media.matches);
+    const handler = () => setReduced(media.matches);
+    media.addEventListener('change', handler);
+    return () => media.removeEventListener('change', handler);
+  }, []);
+
+  return reduced;
+}
+
+export function useCountUp(target: number, duration = 900, decimals = 0, start = true) {
+  const reducedMotion = useReducedMotion();
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (!start) {
+      setValue(0);
+      return;
+    }
+
+    if (reducedMotion) {
+      setValue(target);
+      return;
+    }
+
+    let rafId = 0;
+    let startTime = 0;
+
+    const animate = (timestamp: number) => {
+      if (!startTime) {
+        startTime = timestamp;
+      }
+
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(target * eased);
+
+      if (progress < 1) {
+        rafId = window.requestAnimationFrame(animate);
+      }
+    };
+
+    rafId = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [target, duration, reducedMotion, start]);
+
+  return useMemo(() => Number(value.toFixed(decimals)), [value, decimals]);
+}
+
+export function useRafProgress(progress: number, duration = 700) {
+  const reducedMotion = useReducedMotion();
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      setCurrent(progress);
+      return;
+    }
+
+    let rafId = 0;
+    let startTime = 0;
+    const startValue = current;
+    const delta = progress - startValue;
+
+    const animate = (timestamp: number) => {
+      if (!startTime) {
+        startTime = timestamp;
+      }
+      const t = Math.min((timestamp - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setCurrent(startValue + delta * eased);
+      if (t < 1) {
+        rafId = requestAnimationFrame(animate);
+      }
+    };
+
+    rafId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafId);
+  }, [progress, duration, reducedMotion]);
+
+  return current;
+}
+
+EXPLANATION:
+- motionClasses: Reusable Tailwind class strings for common animations
+- useReducedMotion: Respects user's accessibility preference
+- useCountUp: Animates numbers from 0 to target using requestAnimationFrame
+  * Uses easeOutCubic easing (1 - (1-t)^3)
+  * GPU-optimized with RAF
+  * Respects reduced motion preference
+- useRafProgress: Smoothly animates progress values (0-100)
+  * Used for progress bars
+  * Smooth transitions when value changes
+
+================================================================================
+3. REUSABLE MOTION COMPONENTS
+================================================================================
+
+FILE: src/components/motion/GlassContainer.tsx
+
+import { HTMLAttributes, ReactNode } from 'react';
+
+interface GlassContainerProps extends HTMLAttributes<HTMLDivElement> {
+  children: ReactNode;
+}
+
+export default function GlassContainer({ children, className = '', ...props }: GlassContainerProps) {
+  return (
+    <div {...props} className={`convio-glass ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+EXPLANATION:
+- Base container with glassmorphism effect
+- Uses .convio-glass CSS class (defined in index.css)
+- Backdrop blur + semi-transparent background
+- Accepts all standard div props
+
+--------------------------------------------------------------------------------
+
+FILE: src/components/motion/AnimatedCard.tsx
+
+import { HTMLAttributes, ReactNode } from 'react';
+import { motionClasses } from '../../design/motion';
+import GlassContainer from './GlassContainer';
+
+interface AnimatedCardProps extends HTMLAttributes<HTMLDivElement> {
+  children: ReactNode;
+  glowOnHover?: boolean;
+}
+
+export default function AnimatedCard({
+  children,
+  className = '',
+  glowOnHover = false,
+  ...props
+}: AnimatedCardProps) {
+  return (
+    <GlassContainer
+      {...props}
+      className={`${motionClasses.cardHover} ${glowOnHover ? 'hover:shadow-convio-glow' : ''} ${className}`}
+    >
+      {children}
+    </GlassContainer>
+  );
+}
+
+EXPLANATION:
+- Card with hover lift animation
+- Combines GlassContainer + motion classes
+- Optional glow effect on hover
+- Hover: translateY(-4px), scale(1.01), shadow expands
+- Smooth cubic-bezier transition
+
+--------------------------------------------------------------------------------
+
+FILE: src/components/motion/CountUpNumber.tsx
+
+import { useCountUp } from '../../design/motion';
+
+interface CountUpNumberProps {
+  value: number;
+  decimals?: number;
+  suffix?: string;
+  prefix?: string;
+  duration?: number;
+  className?: string;
+}
+
+export default function CountUpNumber({
+  value,
+  decimals = 0,
+  suffix = '',
+  prefix = '',
+  duration = 900,
+  className = '',
+}: CountUpNumberProps) {
+  const animated = useCountUp(value, duration, decimals, true);
+
+  return <span className={className}>{`${prefix}${animated.toFixed(decimals)}${suffix}`}</span>;
+}
+
+EXPLANATION:
+- Displays animated number that counts up
+- Uses useCountUp hook for smooth animation
+- Supports prefix/suffix (%, $, etc.)
+- Configurable decimals and duration
+- Example: <CountUpNumber value={85} suffix="%" />
+
+--------------------------------------------------------------------------------
+
+FILE: src/components/motion/AnimatedProgressBar.tsx
+
+import { useRafProgress } from '../../design/motion';
+
+interface AnimatedProgressBarProps {
+  value: number;
+  max?: number;
+  className?: string;
+  trackClassName?: string;
+  indicatorClassName?: string;
+  showGlowTrail?: boolean;
+}
+
+export default function AnimatedProgressBar({
+  value,
+  max = 100,
+  className = '',
+  trackClassName = '',
+  indicatorClassName = '',
+  showGlowTrail = false,
+}: AnimatedProgressBarProps) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  const animatedPct = useRafProgress(pct);
+
+  return (
+    <div className={`relative h-2.5 overflow-hidden rounded-full bg-zinc-200/90 ${trackClassName} ${className}`}>
+      <div
+        className={`h-full rounded-full bg-gradient-to-r from-teal-400 to-cyan-500 transition-[width] duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${indicatorClassName}`}
+        style={{ width: `${animatedPct}%` }}
+      />
+      {showGlowTrail && (
+        <div
+          className="pointer-events-none absolute inset-y-0 w-16 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+          style={{ left: `calc(${animatedPct}% - 2rem)` }}
+        />
+      )}
+    </div>
+  );
+}
+
+EXPLANATION:
+- Progress bar with smooth fill animation
+- Uses useRafProgress for smooth width transition
+- Optional glow trail that follows the fill edge
+- Gradient fill (teal to cyan)
+- Animates from 0 to value over 700ms
+

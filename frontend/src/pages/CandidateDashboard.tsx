@@ -1,7 +1,7 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { resumeAPI, interviewAPI, Interview, Resume } from '../services/api';
-import { Upload, FileText, Trash2, Play, AlertCircle, Link2 } from 'lucide-react';
+import { resumeAPI, interviewAPI, analyticsAPI, Interview, OverviewAnalytics, Resume } from '../services/api';
+import { Upload, FileText, Trash2, Play, AlertCircle, Link2, ArrowUpRight } from 'lucide-react';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
 import Skeleton from '../components/Skeleton';
@@ -50,6 +50,7 @@ export default function CandidateDashboard() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [overview, setOverview] = useState<OverviewAnalytics | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -70,6 +71,8 @@ export default function CandidateDashboard() {
       ]);
       setResume(resumeData);
       setInterviews(interviewsData);
+      const overviewData = await analyticsAPI.getOverviewAnalytics().catch(() => null);
+      setOverview(overviewData?.data || null);
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Failed to load dashboard';
       toast.error(errorMessage);
@@ -180,6 +183,12 @@ export default function CandidateDashboard() {
   }
 
   const topSkills = resume?.structuredData?.skills?.slice(0, 8) || [];
+  const actionCards = [
+    { title: 'Practice', subtitle: 'Warm up with targeted drills', path: '/candidate/practice' },
+    { title: 'Mock Setup', subtitle: 'Configure coding or theory rounds', path: '/candidate/mock/setup' },
+    { title: 'Analytics', subtitle: 'Review growth and weak areas', path: '/candidate/analytics' },
+    { title: 'Latest Results', subtitle: 'Open your most recent report', path: completedInterviews[0]?._id ? `/candidate/results/${completedInterviews[0]._id}` : '/candidate/dashboard' }
+  ];
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -189,6 +198,62 @@ export default function CandidateDashboard() {
           Track readiness, AI confidence, and interview outcomes from one adaptive workspace.
         </p>
       </section>
+
+      {overview && (
+        <AnimatedCard className="rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-600 to-blue-600 p-6 text-white shadow-md" glowOnHover>
+          <div className="grid gap-4 md:grid-cols-4">
+            <div>
+              <p className="text-sm text-indigo-100">Readiness Score</p>
+              <p className="text-5xl font-semibold">{overview.readinessScore}</p>
+            </div>
+            <div>
+              <p className="text-sm text-indigo-100">Status</p>
+              <span className="mt-2 inline-flex rounded-full bg-white/20 px-3 py-1 text-sm font-semibold">{overview.readinessLevel || 'Improving'}</span>
+            </div>
+            <div>
+              <p className="text-sm text-indigo-100">Strongest Skill</p>
+              <p className="mt-2 text-lg font-semibold">{overview.strongestSkill}</p>
+            </div>
+            <div>
+              <p className="text-sm text-indigo-100">Weakest Skill</p>
+              <p className="mt-2 text-lg font-semibold">{overview.weakestSkill}</p>
+            </div>
+          </div>
+          <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/20">
+            <div className="h-full animate-pulse bg-white/90" style={{ width: `${overview.readinessPercentage || 0}%` }} />
+          </div>
+        </AnimatedCard>
+      )}
+
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {actionCards.map((card) => (
+          <button
+            key={card.title}
+            onClick={() => navigate(card.path)}
+            className="group rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-md transition hover:-translate-y-0.5 hover:border-indigo-300"
+          >
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-slate-900">{card.title}</h3>
+              <ArrowUpRight size={18} className="text-slate-400 transition group-hover:text-indigo-600" />
+            </div>
+            <p className="mt-2 text-sm text-slate-600">{card.subtitle}</p>
+          </button>
+        ))}
+      </div>
+
+      {topSkills.length > 0 && (
+        <AnimatedCard className="p-6">
+          <h2 className="mb-4 text-xl font-semibold text-zinc-900">Skill Grid</h2>
+          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
+            {topSkills.map((skill, idx) => (
+              <div key={skill} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
+                <span className="font-medium text-slate-800">{skill}</span>
+                <span className={idx < 2 ? 'text-emerald-600' : 'text-amber-600'}>{idx < 2 ? '↑' : '→'}</span>
+              </div>
+            ))}
+          </div>
+        </AnimatedCard>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <AnimatedCard className="p-6" glowOnHover>

@@ -217,8 +217,9 @@ export default function InterviewSession() {
     (Boolean(targetWeakTopic) && currentQuestion.topic === targetWeakTopic);
 
   function isCodingQuestion(question: Interview['questions'][0]) {
-    const questionAny = question as { isCoding?: boolean; topic?: string; domain?: string; question?: string };
+    const questionAny = question as { isCoding?: boolean; type?: string; topic?: string; domain?: string; question?: string };
     if (questionAny?.isCoding) return true;
+    if (questionAny?.type === 'coding') return true;
     if (interview?.interviewType === 'coding') return true;
     if (interview?.interviewType === 'theoretical') return false;
 
@@ -228,6 +229,23 @@ export default function InterviewSession() {
   }
 
   const remainingQuestions = interview.questions.length - currentQuestionIndex - 1;
+
+  const runCode = async ({ code, language, questionIndex }: { code: string; language: string; questionIndex: number }) => {
+    try {
+      const result = await interviewAPI.runCode(id!, { code, language, questionIndex });
+      if (result.error) {
+        toast.error(result.error);
+      } else if (result.passed) {
+        toast.success('All visible test cases passed');
+      } else {
+        toast.warning('Some test cases failed');
+      }
+      return result;
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || 'Code execution failed');
+      return null;
+    }
+  };
 
   return (
     <div className="mx-auto max-w-4xl space-y-5">
@@ -290,8 +308,17 @@ export default function InterviewSession() {
             <CodingQuestionComponent
               question={currentQuestion.question}
               questionIndex={currentQuestionIndex}
+              questionData={{
+                inputFormat: (currentQuestion as any).inputFormat,
+                outputFormat: (currentQuestion as any).outputFormat,
+                constraints: (currentQuestion as any).constraints,
+                examples: (currentQuestion as any).examples,
+                template: (currentQuestion as any).template,
+              }}
+              storageKeyPrefix={`coding_answer_${id}`}
               isSubmitting={submitting}
               difficultyShift={difficultyChange}
+              onRun={runCode}
               onCodeChange={(code: string, language: string) => {
                 setCodingAnswer(code);
                 setCodingLanguage(language);

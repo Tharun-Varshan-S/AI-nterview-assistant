@@ -1,9 +1,7 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   LineChart,
   Line,
-  AreaChart,
-  Area,
   BarChart,
   Bar,
   RadarChart,
@@ -16,10 +14,7 @@ import {
   CartesianGrid,
   Tooltip,
   Legend,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
+  ResponsiveContainer
 } from 'recharts';
 import { analyticsAPI } from '../services/api';
 import { toast } from 'sonner';
@@ -29,337 +24,149 @@ export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);
   const [overview, setOverview] = useState<any>(null);
   const [fullReport, setFullReport] = useState<any>(null);
-  const [consistency, setConsistency] = useState<any>(null);
 
   useEffect(() => {
+    const loadAnalytics = async () => {
+      setLoading(true);
+      try {
+        const [overviewRes, reportRes] = await Promise.all([
+          analyticsAPI.getOverviewAnalytics(),
+          analyticsAPI.getFullAnalyticsReport()
+        ]);
+        setOverview(overviewRes.data);
+        setFullReport(reportRes.data);
+      } catch {
+        toast.error('Failed to load analytics');
+      } finally {
+        setLoading(false);
+      }
+    };
     loadAnalytics();
   }, []);
 
-  const loadAnalytics = async () => {
-    setLoading(true);
-    try {
-      const [overviewRes, reportRes, consistencyRes] = await Promise.all([
-        analyticsAPI.getOverviewAnalytics(),
-        analyticsAPI.getFullAnalyticsReport(),
-        analyticsAPI.getResumeConsistency().catch(() => null),
-      ]);
+  const radarData = useMemo(() => {
+    const topics = fullReport?.topicPerformance || [];
+    return topics.slice(0, 6).map((topic: any) => ({
+      skill: topic.topic,
+      score: Number(topic.averageScore || 0)
+    }));
+  }, [fullReport]);
 
-      setOverview(overviewRes.data);
-      setFullReport(reportRes.data);
-      setConsistency(consistencyRes?.data || null);
-    } catch (error: any) {
-      toast.error('Failed to load analytics');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const difficultyData = useMemo(() => {
+    if (!fullReport?.difficultyBreakdown) return [];
+    return [
+      { difficulty: 'Easy', count: Number(fullReport.difficultyBreakdown.easy || 0) },
+      { difficulty: 'Medium', count: Number(fullReport.difficultyBreakdown.medium || 0) },
+      { difficulty: 'Hard', count: Number(fullReport.difficultyBreakdown.hard || 0) }
+    ];
+  }, [fullReport]);
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-6">
+      <div className="flex min-h-[60vh] items-center justify-center">
         <Spinner size="lg" />
       </div>
     );
   }
 
-  const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'];
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
-      <div className="max-w-screen-2xl mx-auto space-y-8">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Analytics & Insights</h1>
-          <p className="text-slate-400">Track your progress and identify improvement areas</p>
-        </div>
-
-        {/* Overview Cards */}
-        {overview && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-              <div className="text-slate-400 text-sm font-medium mb-2">Readiness Score</div>
-              <div className="flex items-end gap-3">
-                <div className="text-4xl font-bold text-white">{overview.readinessScore}</div>
-                <div className="text-xs text-slate-500 mb-1">/ 100</div>
-              </div>
-              <div className="mt-4 h-2 bg-slate-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-gradient-to-r from-blue-500 to-cyan-500"
-                  style={{ width: `${Math.min(overview.readinessScore, 100)}%` }}
-                />
-              </div>
-              <p className="text-xs text-slate-400 mt-3">Overall interview readiness</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-              <div className="text-slate-400 text-sm font-medium mb-2">Strongest Skill</div>
-              <div className="text-2xl font-bold text-white truncate">{overview.strongestSkill}</div>
-              <p className="text-xs text-slate-400 mt-3">Your top performing skill</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-              <div className="text-slate-400 text-sm font-medium mb-2">Weakest Skill</div>
-              <div className="text-2xl font-bold text-white truncate">{overview.weakestSkill}</div>
-              <p className="text-xs text-slate-400 mt-3">Focus area for improvement</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-              <div className="text-slate-400 text-sm font-medium mb-2">Total Sessions</div>
-              <div className="text-4xl font-bold text-white">{overview.totalSessions}</div>
-              <div className="text-xs text-slate-500 mt-2">
-                {overview.totalInterviews} interviews, {overview.totalPracticeSessions} practice
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Performance Metrics */}
-        {overview && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-              <h3 className="text-white font-bold mb-4">Coding Accuracy</h3>
-              <div className="flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-blue-400">{Number(overview.codingAccuracy).toFixed(1)}</div>
-                  <p className="text-slate-400 text-sm mt-1">/ 10</p>
-                </div>
-              </div>
-              <div className="mt-4 h-2 bg-slate-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-blue-500"
-                  style={{ width: `${(overview.codingAccuracy / 10) * 100}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-              <h3 className="text-white font-bold mb-4">Theoretical Knowledge</h3>
-              <div className="flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-4xl font-bold text-emerald-400">
-                    {Number(overview.theoreticalAccuracy).toFixed(1)}
-                  </div>
-                  <p className="text-slate-400 text-sm mt-1">/ 10</p>
-                </div>
-              </div>
-              <div className="mt-4 h-2 bg-slate-700 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500"
-                  style={{ width: `${(overview.theoreticalAccuracy / 10) * 100}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-              <h3 className="text-white font-bold mb-4">Learning Velocity</h3>
-              <div className="flex items-center justify-center">
-                <div className="text-center">
-                  <div className={`text-4xl font-bold ${overview.learningVelocity >= 0 ? 'text-orange-400' : 'text-red-400'}`}>
-                    {Number(overview.learningVelocity).toFixed(2)}
-                  </div>
-                  <p className="text-slate-400 text-sm mt-1">{overview.learningVelocity >= 0 ? '📈 Improving' : '📉 Needs work'}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Charts Section */}
-        {fullReport && (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Skill Growth Over Time */}
-            {fullReport.skillGrowth && fullReport.skillGrowth.length > 0 && (
-              <div className="min-w-0 bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-                <h3 className="text-white font-bold mb-4">Skill Growth Over Time</h3>
-                <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={280}>
-                  <AreaChart data={fullReport.skillGrowth}>
-                    <defs>
-                      <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                        <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="date" stroke="#9ca3af" />
-                    <YAxis stroke="#9ca3af" />
-                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none', borderRadius: '8px' }} />
-                    <Area type="monotone" dataKey="score" stroke="#3b82f6" fill="url(#colorScore)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {/* Difficulty Breakdown */}
-            {fullReport.difficultyBreakdown && (
-              <div className="min-w-0 bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-                <h3 className="text-white font-bold mb-4">Difficulty Breakdown</h3>
-                <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={280}>
-                  <PieChart>
-                    <Pie
-                      data={[
-                        { name: 'Easy', value: fullReport.difficultyBreakdown.easy },
-                        { name: 'Medium', value: fullReport.difficultyBreakdown.medium },
-                        { name: 'Hard', value: fullReport.difficultyBreakdown.hard },
-                      ]}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {colors.map((color, index) => (
-                        <Cell key={`cell-${index}`} fill={color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {/* Coding vs Theoretical */}
-            {fullReport.codingVsTheory && (
-              <div className="min-w-0 bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-                <h3 className="text-white font-bold mb-4">Coding vs Theoretical</h3>
-                <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={280}>
-                  <BarChart
-                    data={[
-                      {
-                        name: 'Performance',
-                        Coding: Number(fullReport.codingVsTheory.coding.average),
-                        Theoretical: Number(fullReport.codingVsTheory.theoretical.average),
-                      },
-                    ]}
-                  >
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis stroke="#9ca3af" />
-                    <YAxis stroke="#9ca3af" />
-                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none' }} />
-                    <Legend />
-                    <Bar dataKey="Coding" fill="#3b82f6" />
-                    <Bar dataKey="Theoretical" fill="#10b981" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            {/* Topic Performance */}
-            {fullReport.topicPerformance && fullReport.topicPerformance.length > 0 && (
-              <div className="min-w-0 bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-                <h3 className="text-white font-bold mb-4">Topic Performance</h3>
-                <ResponsiveContainer width="100%" height={300} minWidth={0} minHeight={280}>
-                  <BarChart data={fullReport.topicPerformance.slice(0, 6)}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#374151" />
-                    <XAxis dataKey="topic" stroke="#9ca3af" angle={-45} textAnchor="end" height={80} />
-                    <YAxis stroke="#9ca3af" />
-                    <Tooltip contentStyle={{ backgroundColor: '#1e293b', border: 'none' }} />
-                    <Bar dataKey="averageScore" fill="#8b5cf6" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Resume Consistency */}
-        {consistency && (
-          <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-8">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-white">Resume Consistency Analysis</h2>
-              <div className="flex items-center gap-3">
-                <span className="text-slate-400">Score</span>
-                <div className="text-3xl font-bold text-white">{consistency.resumeConsistencyScore}</div>
-                <span className="text-slate-400">/ 100</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-              <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-6">
-                <div className="text-slate-400 text-sm font-medium mb-2">Verified Strengths</div>
-                <div className="text-3xl font-bold text-green-400">{consistency.verifiedStrengths?.length || 0}</div>
-                <p className="text-xs text-slate-400 mt-2">Skills claimed and proven</p>
-              </div>
-
-              <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-6">
-                <div className="text-slate-400 text-sm font-medium mb-2">Inflated Skills</div>
-                <div className="text-3xl font-bold text-red-400">{consistency.inflatedSkills?.length || 0}</div>
-                <p className="text-xs text-slate-400 mt-2">Consider removing from resume</p>
-              </div>
-
-              <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-6">
-                <div className="text-slate-400 text-sm font-medium mb-2">Hidden Strengths</div>
-                <div className="text-3xl font-bold text-blue-400">{consistency.hiddenStrengths?.length || 0}</div>
-                <p className="text-xs text-slate-400 mt-2">Not claimed but accomplished</p>
-              </div>
-
-              <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-6">
-                <div className="text-slate-400 text-sm font-medium mb-2">Weak Areas</div>
-                <div className="text-3xl font-bold text-orange-400">{consistency.weakAreas?.length || 0}</div>
-                <p className="text-xs text-slate-400 mt-2">Need improvement</p>
-              </div>
-            </div>
-
-            {/* Recommendations */}
-            {consistency.recommendations && consistency.recommendations.length > 0 && (
-              <div className="space-y-3">
-                <h3 className="text-white font-bold">Recommendations</h3>
-                {consistency.recommendations.map((rec: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className={`p-4 rounded-lg border ${
-                      rec.type === 'critical'
-                        ? 'bg-red-500/10 border-red-500/30 text-red-200'
-                        : rec.type === 'warning'
-                        ? 'bg-orange-500/10 border-orange-500/30 text-orange-200'
-                        : 'bg-blue-500/10 border-blue-500/30 text-blue-200'
-                    }`}
-                  >
-                    <p className="font-medium">{rec.message}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Skill Details */}
-        {fullReport?.topicPerformance && (
-          <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6">
-            <h2 className="text-2xl font-bold text-white mb-6">Detailed Skill Performance</h2>
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-slate-600">
-                    <th className="text-left py-3 px-4 text-slate-400 font-medium">Topic</th>
-                    <th className="text-left py-3 px-4 text-slate-400 font-medium">Score</th>
-                    <th className="text-left py-3 px-4 text-slate-400 font-medium">Attempts</th>
-                    <th className="text-left py-3 px-4 text-slate-400 font-medium">Progress</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {fullReport.topicPerformance.map((topic: any, idx: number) => (
-                    <tr key={idx} className="border-b border-slate-700 hover:bg-slate-700/50">
-                      <td className="py-4 px-4 text-white font-medium">{topic.topic}</td>
-                      <td className="py-4 px-4 text-blue-400 font-bold">{Number(topic.averageScore).toFixed(1)}/10</td>
-                      <td className="py-4 px-4 text-slate-400">{topic.attempts}</td>
-                      <td className="py-4 px-4">
-                        <div className="w-24 bg-slate-700 rounded-full h-2">
-                          <div
-                            className="bg-blue-500 h-2 rounded-full"
-                            style={{ width: `${(topic.averageScore / 10) * 100}%` }}
-                          />
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
+    <div className="space-y-6">
+      <div className="rounded-2xl border border-slate-200 bg-gradient-to-r from-indigo-600 to-blue-600 p-6 text-white shadow-md">
+        <h1 className="text-3xl font-semibold">Analytics</h1>
+        <p className="mt-1 text-sm text-indigo-100">Track readiness and performance trend across interviews.</p>
       </div>
+
+      {overview && (
+        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+            <p className="text-sm text-slate-500">Readiness Score</p>
+            <p className="mt-2 text-4xl font-semibold text-slate-900">{overview.readinessScore}</p>
+            <p className="mt-1 text-xs text-slate-500">{overview.readinessLevel || 'Improving'}</p>
+            <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-100">
+              <div className="h-full bg-gradient-to-r from-indigo-500 to-blue-500" style={{ width: `${overview.readinessPercentage || 0}%` }} />
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+            <p className="text-sm text-slate-500">Coding Accuracy</p>
+            <p className="mt-2 text-4xl font-semibold text-slate-900">{Number(overview.codingAccuracy || 0).toFixed(1)}</p>
+            <p className="mt-1 text-xs text-slate-500">Out of 10</p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+            <p className="text-sm text-slate-500">Strongest Skill</p>
+            <p className="mt-2 text-2xl font-semibold text-emerald-700">{overview.strongestSkill}</p>
+            <p className="mt-4 text-sm text-slate-500">Weakest: <span className="font-medium text-amber-600">{overview.weakestSkill}</span></p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+            <p className="text-sm text-slate-500">Learning Velocity</p>
+            <p className={`mt-2 text-4xl font-semibold ${overview.learningVelocity >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {Number(overview.learningVelocity || 0).toFixed(2)}
+            </p>
+            <p className="mt-1 text-xs text-slate-500">{overview.learningVelocity >= 0 ? 'Improving' : 'Needs correction'}</p>
+          </div>
+        </div>
+      )}
+
+      {fullReport && (
+        <div className="grid gap-6 xl:grid-cols-2">
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+            <h2 className="mb-4 text-lg font-semibold text-slate-900">Skill Growth</h2>
+            <ResponsiveContainer width="100%" height={280}>
+              <LineChart data={fullReport.skillGrowth || []}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="date" stroke="#64748b" />
+                <YAxis stroke="#64748b" />
+                <Tooltip />
+                <Line type="monotone" dataKey="score" stroke="#4f46e5" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+            <h2 className="mb-4 text-lg font-semibold text-slate-900">Skill Distribution</h2>
+            <ResponsiveContainer width="100%" height={280}>
+              <RadarChart data={radarData}>
+                <PolarGrid />
+                <PolarAngleAxis dataKey="skill" />
+                <PolarRadiusAxis domain={[0, 10]} />
+                <Radar name="Score" dataKey="score" stroke="#2563eb" fill="#2563eb" fillOpacity={0.3} />
+                <Legend />
+              </RadarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+            <h2 className="mb-4 text-lg font-semibold text-slate-900">Difficulty Performance</h2>
+            <ResponsiveContainer width="100%" height={280}>
+              <BarChart data={difficultyData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                <XAxis dataKey="difficulty" stroke="#64748b" />
+                <YAxis stroke="#64748b" />
+                <Tooltip />
+                <Bar dataKey="count" fill="#3b82f6" />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-md">
+            <h2 className="mb-4 text-lg font-semibold text-slate-900">Coding vs Theoretical</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded-xl bg-indigo-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Coding</p>
+                <p className="mt-2 text-3xl font-semibold text-indigo-800">{Number(fullReport.codingVsTheory?.coding?.average || 0).toFixed(1)}</p>
+                <p className="text-xs text-slate-500">Attempts: {fullReport.codingVsTheory?.coding?.attempts || 0}</p>
+              </div>
+              <div className="rounded-xl bg-emerald-50 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Theoretical</p>
+                <p className="mt-2 text-3xl font-semibold text-emerald-800">{Number(fullReport.codingVsTheory?.theoretical?.average || 0).toFixed(1)}</p>
+                <p className="text-xs text-slate-500">Attempts: {fullReport.codingVsTheory?.theoretical?.attempts || 0}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

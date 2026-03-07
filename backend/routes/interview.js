@@ -10,7 +10,8 @@ const {
   getInterviewWithDetails,
   generateSkillGapReport,
   getConsistency,
-  getAdaptiveHistory
+  getAdaptiveHistory,
+  runCode
 } = require('../controllers/interviewController');
 const { protect, authorize } = require('../middleware/auth');
 
@@ -27,6 +28,7 @@ router.get('/:id', protect, getInterview);
 router.get('/:id/details', protect, getInterviewWithDetails);
 router.get('/:id/consistency', protect, getConsistency);
 router.get('/:id/adaptive-history', protect, getAdaptiveHistory);
+router.post('/:id/run-code', protect, authorize('candidate'), runCode);
 router.post('/:id/submit-answer', protect, authorize('candidate'), submitAnswer);
 router.patch('/:id/complete', protect, authorize('candidate'), completeInterview);
 

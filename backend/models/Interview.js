@@ -30,11 +30,27 @@ const interviewSchema = new mongoose.Schema(
     questionsAsked: [
       {
         question: String,
+        type: {
+          type: String,
+          enum: ['coding', 'theoretical'],
+          default: 'theoretical'
+        },
         difficulty: String,
         topic: String,
         domain: String,
         timeLimit: Number,
         isCoding: Boolean,
+        inputFormat: String,
+        outputFormat: String,
+        constraints: [String],
+        examples: [
+          {
+            input: String,
+            output: String,
+            explanation: String
+          }
+        ],
+        template: String,
         testCases: [
           {
             input: [mongoose.Schema.Types.Mixed],
@@ -48,11 +64,27 @@ const interviewSchema = new mongoose.Schema(
     questions: [
       {
         question: String,
+        type: {
+          type: String,
+          enum: ['coding', 'theoretical'],
+          default: 'theoretical'
+        },
         difficulty: String,
         topic: String,
         domain: String,
         timeLimit: Number,
         isCoding: Boolean,
+        inputFormat: String,
+        outputFormat: String,
+        constraints: [String],
+        examples: [
+          {
+            input: String,
+            output: String,
+            explanation: String
+          }
+        ],
+        template: String,
         testCases: [
           {
             input: [mongoose.Schema.Types.Mixed],

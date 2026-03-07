@@ -11,6 +11,14 @@ const logger = require('../utils/logger');
  */
 
 class CodeExecutionSimulator {
+  static toLegacyShape(response) {
+    return {
+      ...response,
+      testResults: response.results,
+      runtimeError: response.error
+    };
+  }
+
   /**
    * Execute JavaScript code safely with test cases
    * @param {string} code - User's code
@@ -18,11 +26,11 @@ class CodeExecutionSimulator {
    * @returns {object} Execution results
    */
   static async executeJavaScript(code, testCases = []) {
-    const results = {
+    const baseResponse = {
       passed: false,
-      testResults: [],
-      runtimeError: null,
-      output: '',
+      results: [],
+      error: null,
+      output: ''
     };
 
     try {
@@ -31,7 +39,7 @@ class CodeExecutionSimulator {
         sandbox: {
           console: {
             log: (...args) => {
-              results.output += args.join(' ') + '\n';
+              baseResponse.output += args.join(' ') + '\n';
             },
           },
         },
@@ -40,43 +48,45 @@ class CodeExecutionSimulator {
       // Run the code to define functions
       vm.run(code);
 
-      // Extract function name (common pattern)
-      const functionMatch = code.match(/function\s+(\w+)\s*\(/);
-      if (!functionMatch && testCases.length > 0) {
-        return {
-          ...results,
-          runtimeError:
-            'No function definition found. Expected: function functionName(params) { ... }',
-        };
+      const solveFn = vm.run(`
+        (typeof solve === 'function' && solve) ||
+        (typeof solution === 'function' && solution) ||
+        (typeof main === 'function' && main) ||
+        null
+      `);
+      if (typeof solveFn !== 'function' && testCases.length > 0) {
+        return this.toLegacyShape({
+          ...baseResponse,
+          error: 'No callable function found. Define solve(), solution(), or main().'
+        });
       }
-
-      const functionName = functionMatch ? functionMatch[1] : null;
 
       // Run test cases
       if (testCases.length === 0) {
-        results.testResults = [
+        return this.toLegacyShape({
+          ...baseResponse,
+          passed: true,
+          results: [
           {
             input: 'No test cases',
             expected: 'N/A',
             actual: 'Code executed without errors',
             passed: true,
           },
-        ];
-        results.passed = true;
-        return results;
+          ]
+        });
       }
 
       let passCount = 0;
+      const perCaseResults = [];
       for (const testCase of testCases) {
         try {
-          const func = vm.run(functionName);
-          const actual = functionName
-            ? func(...(Array.isArray(testCase.input) ? testCase.input : [testCase.input]))
-            : vm.run(`(${code})(${JSON.stringify(testCase.input)})`);
+          const args = Array.isArray(testCase.input) ? testCase.input : [testCase.input];
+          const actual = solveFn(...args);
 
-          const passed = JSON.stringify(actual) === JSON.stringify(testCase.expectedOutput);
+          const passed = JSON.stringify(actual) === JSON.stringify(testCase.expectedOutput ?? null);
 
-          results.testResults.push({
+          perCaseResults.push({
             input: JSON.stringify(testCase.input),
             expected: JSON.stringify(testCase.expectedOutput),
             actual: JSON.stringify(actual),
@@ -86,7 +96,7 @@ class CodeExecutionSimulator {
 
           if (passed) passCount++;
         } catch (err) {
-          results.testResults.push({
+          perCaseResults.push({
             input: JSON.stringify(testCase.input),
             expected: JSON.stringify(testCase.expectedOutput),
             actual: 'ERROR',
@@ -96,14 +106,17 @@ class CodeExecutionSimulator {
         }
       }
 
-      results.passed = passCount === testCases.length;
-      return results;
+      return this.toLegacyShape({
+        ...baseResponse,
+        passed: passCount === testCases.length,
+        results: perCaseResults
+      });
     } catch (err) {
       logger.error('JavaScript execution error:', err);
-      return {
-        ...results,
-        runtimeError: err.message || 'Runtime error occurred',
-      };
+      return this.toLegacyShape({
+        ...baseResponse,
+        error: err.message || 'Runtime error occurred'
+      });
     }
   }
 
@@ -115,10 +128,10 @@ class CodeExecutionSimulator {
    * @returns {object} Analysis results
    */
   static async executeWithGemini(code, language, testCases = []) {
-    const results = {
+    const baseResponse = {
       passed: false,
-      testResults: [],
-      runtimeError: null,
+      results: [],
+      error: null,
       output: '',
     };
 
@@ -151,21 +164,32 @@ Respond with a JSON object exactly in this format:
 }
 `;
 
-      const response = await geminiService.analyzeWithGemini(prompt);
-      let parsed = JSON.parse(response);
+      const response = await geminiService.simulateCodeExecution('Coding simulation', code, language, testCases);
+      const totalCases = Number(response?.totalTestCases || testCases.length || 0);
+      const passedCases = Number(response?.testCasesPassed || 0);
+      const simulatedResults = testCases.map((tc, index) => {
+        const passed = index < passedCases;
+        return {
+          input: JSON.stringify(tc.input),
+          expected: JSON.stringify(tc.expectedOutput),
+          actual: passed ? JSON.stringify(tc.expectedOutput) : 'Mismatch',
+          passed,
+          description: tc.description || `Test case ${index + 1}`
+        };
+      }).slice(0, totalCases || testCases.length);
 
-      return {
-        passed: parsed.passed || false,
-        testResults: parsed.testResults || results.testResults,
-        runtimeError: parsed.runtimeError || null,
-        output: parsed.output || '',
-      };
+      return this.toLegacyShape({
+        ...baseResponse,
+        passed: passedCases === totalCases && !response?.runtimeError,
+        results: simulatedResults,
+        error: response?.runtimeError || null
+      });
     } catch (err) {
       logger.error('Gemini code analysis error:', err);
-      return {
-        ...results,
-        runtimeError: 'Failed to analyze code: ' + err.message,
-      };
+      return this.toLegacyShape({
+        ...baseResponse,
+        error: 'Failed to analyze code: ' + err.message
+      });
     }
   }
 

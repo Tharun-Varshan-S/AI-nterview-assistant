@@ -184,28 +184,51 @@ const callGeminiWithPromptControl = async ({ prompt, promptVersion, schema, fall
   }
 };
 
-const normalizeQuestion = (q = {}) => ({
-  question: String(q.question || '').trim(),
-  difficulty: String(q.difficulty || 'medium').toLowerCase(),
-  topic: String(q.topic || 'General').trim(),
-  domain: String(q.domain || 'General').trim(),
-  timeLimit: Number(q.timeLimit || 60),
-  isCoding: Boolean(q.isCoding),
-  testCases: Array.isArray(q.testCases)
-    ? q.testCases.slice(0, 5).map((tc) => ({
-      input: Array.isArray(tc?.input) ? tc.input : [tc?.input],
-      expectedOutput: tc?.expectedOutput,
-      description: String(tc?.description || 'Generated test case')
-    }))
-    : []
-});
+const normalizeQuestion = (q = {}) => {
+  const type = String(q.type || (q.isCoding ? 'coding' : 'theoretical')).toLowerCase() === 'coding'
+    ? 'coding'
+    : 'theoretical';
+  const isCoding = type === 'coding';
+  return {
+    question: String(q.question || '').trim(),
+    type,
+    difficulty: String(q.difficulty || 'medium').toLowerCase(),
+    topic: String(q.topic || 'General').trim(),
+    domain: String(q.domain || 'General').trim(),
+    timeLimit: Number(q.timeLimit || 60),
+    isCoding,
+    inputFormat: isCoding ? String(q.inputFormat || '').trim() : '',
+    outputFormat: isCoding ? String(q.outputFormat || '').trim() : '',
+    constraints: isCoding && Array.isArray(q.constraints)
+      ? q.constraints.slice(0, 8).map((c) => String(c))
+      : [],
+    examples: isCoding && Array.isArray(q.examples)
+      ? q.examples.slice(0, 3).map((ex) => ({
+        input: String(ex?.input ?? ''),
+        output: String(ex?.output ?? ''),
+        explanation: String(ex?.explanation ?? '')
+      }))
+      : [],
+    template: isCoding ? String(q.template || '').trim() : '',
+    testCases: isCoding && Array.isArray(q.testCases)
+      ? q.testCases.slice(0, 5).map((tc) => ({
+        input: Array.isArray(tc?.input) ? tc.input : [tc?.input],
+        expectedOutput: tc?.expectedOutput,
+        description: String(tc?.description || 'Generated test case')
+      }))
+      : []
+  };
+};
 
-const normalizeQuestionsPayload = (payload) => {
+const normalizeQuestionsPayload = (payload, expectedCount = 6) => {
   if (!payload || !Array.isArray(payload.questions)) return null;
 
   const normalized = payload.questions.map(normalizeQuestion);
 
-  const valid = normalized.length === 6 && normalized.every((q) =>
+  const safeCount = Number.isFinite(Number(expectedCount))
+    ? Math.max(3, Math.min(10, Number(expectedCount)))
+    : 6;
+  const valid = normalized.length === safeCount && normalized.every((q) =>
     q.question && ['easy', 'medium', 'hard'].includes(q.difficulty) && Number.isFinite(q.timeLimit) && q.timeLimit > 0
   );
 
@@ -249,7 +272,7 @@ exports.generateInterviewQuestions = async (context) => {
   });
 
   if (!result) return null;
-  return normalizeQuestionsPayload(result);
+  return normalizeQuestionsPayload(result, context?.questionCount || 6);
 };
 
 exports.generateInterviewQuestionsWithMetadata = async (context) => {

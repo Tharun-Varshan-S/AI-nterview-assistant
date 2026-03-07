@@ -5,6 +5,7 @@ const AdaptiveEngine = require('../engines/adaptiveEngine');
 const SkillScoringEngine = require('../engines/skillScoringEngine');
 const CodingEvaluationEngine = require('../engines/codingEvaluationEngine');
 const CodeExecutionEngine = require('../engines/codeExecutionEngine');
+const CodeExecutionSimulator = require('../services/codeExecutionSimulator');
 const ResumeConsistencyEngine = require('../engines/resumeConsistencyEngine');
 const SkillTrajectoryEngine = require('../engines/skillTrajectoryEngine');
 const EvaluationReliabilityEngine = require('../engines/evaluationReliabilityEngine');
@@ -49,6 +50,46 @@ const calculateBehaviorMetrics = (answers = []) => {
   };
 };
 
+const enforceInterviewTypeComposition = ({ questions = [], interviewType = 'theoretical' }) => {
+  const normalizedQuestions = Array.isArray(questions) ? questions : [];
+
+  const coding = normalizedQuestions.filter((q) => q?.isCoding || q?.type === 'coding');
+  const theory = normalizedQuestions.filter((q) => !(q?.isCoding || q?.type === 'coding'));
+
+  if (interviewType === 'coding') {
+    const safe = coding.length > 0 ? coding : normalizedQuestions;
+    return safe.map((q) => ({
+      ...q,
+      type: 'coding',
+      isCoding: true
+    }));
+  }
+
+  if (interviewType === 'theoretical') {
+    const safe = theory.length > 0 ? theory : normalizedQuestions;
+    return safe.map((q) => ({
+      ...q,
+      type: 'theoretical',
+      isCoding: false,
+      testCases: [],
+      template: '',
+      inputFormat: '',
+      outputFormat: '',
+      constraints: [],
+      examples: []
+    }));
+  }
+
+  const targetCodingCount = Math.max(1, Math.round(normalizedQuestions.length / 2));
+  const mixed = [...coding.slice(0, targetCodingCount), ...theory.slice(0, normalizedQuestions.length - targetCodingCount)];
+  const fallback = mixed.length === normalizedQuestions.length ? mixed : normalizedQuestions;
+  return fallback.map((q) => ({
+    ...q,
+    type: q?.isCoding || q?.type === 'coding' ? 'coding' : 'theoretical',
+    isCoding: Boolean(q?.isCoding || q?.type === 'coding')
+  }));
+};
+
 exports.createInterview = async (req, res, next) => {
   try {
     const { 
@@ -90,7 +131,8 @@ exports.createInterview = async (req, res, next) => {
       structuredData: resume.structuredData,
       rawText: resume.extractedText,
       focusTopics: topicsToFocus.length > 0 ? topicsToFocus : weakTopics,
-      questionCount: Math.min(questionCount, 10)
+      questionCount: Math.min(questionCount, 10),
+      interviewType
     });
 
     if (!questionsResult?.questions || questionsResult.questions.length === 0) {
@@ -100,8 +142,13 @@ exports.createInterview = async (req, res, next) => {
       });
     }
 
+    const filteredQuestions = enforceInterviewTypeComposition({
+      questions: questionsResult.questions,
+      interviewType
+    });
+
     const skillPerformance = new Map();
-    questionsResult.questions.forEach((q) => {
+    filteredQuestions.forEach((q) => {
       if (!skillPerformance.has(q.topic)) {
         skillPerformance.set(q.topic, {
           topicName: q.topic,
@@ -115,7 +162,7 @@ exports.createInterview = async (req, res, next) => {
       userId: req.user.id,
       resumeId: resume._id,
       interviewType,
-      questions: questionsResult.questions,
+      questions: filteredQuestions,
       questionsAsked: [],
       currentDifficulty: 'medium',
       skillPerformance,
@@ -345,6 +392,50 @@ exports.submitAnswer = async (req, res, next) => {
     });
   } catch (error) {
     logger.error('Answer submission failed', error);
+    next(error);
+  }
+};
+
+exports.runCode = async (req, res, next) => {
+  try {
+    const { questionIndex, code, language = 'javascript' } = req.body;
+    if (!code || !String(code).trim()) {
+      return res.status(400).json({ success: false, message: 'Code is required' });
+    }
+
+    const interview = await Interview.findById(req.params.id);
+    const access = ensureInterviewAccess(interview, req.user);
+    if (!access.ok) {
+      return res.status(access.status).json({ success: false, message: access.message });
+    }
+
+    const index = Number(questionIndex);
+    if (!Number.isInteger(index) || index < 0 || index >= interview.questions.length) {
+      return res.status(400).json({ success: false, message: 'Invalid question index' });
+    }
+
+    const questionMetadata = interview.questions[index] || {};
+    const providedCases = Array.isArray(questionMetadata.testCases) ? questionMetadata.testCases : [];
+    const generatedCases = providedCases.length === 0
+      ? await geminiService.generateExecutionTestCases(questionMetadata.question, language)
+      : [];
+    const testCases = providedCases.length > 0 ? providedCases : generatedCases;
+
+    const execution = await CodeExecutionSimulator.execute(code, language, testCases);
+    const complexity = CodeExecutionSimulator.analyzeComplexity(code);
+
+    res.json({
+      success: true,
+      data: {
+        passed: Boolean(execution.passed),
+        results: Array.isArray(execution.results) ? execution.results : [],
+        error: execution.error || null,
+        output: execution.output || '',
+        complexity
+      }
+    });
+  } catch (error) {
+    logger.error('Run code failed', error);
     next(error);
   }
 };

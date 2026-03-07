@@ -1,0 +1,292 @@
+================================================================================
+CONVIO UI UPGRADE - CODE STUDY GUIDE - PART 2: INTERACTIVE COMPONENTS
+================================================================================
+
+FILE: src/components/motion/AnimatedStat.tsx
+
+import { ReactNode } from 'react';
+import AnimatedCard from './AnimatedCard';
+import CountUpNumber from './CountUpNumber';
+
+interface AnimatedStatProps {
+  label: string;
+  value: number;
+  decimals?: number;
+  suffix?: string;
+  icon?: ReactNode;
+  deltaLabel?: string;
+  className?: string;
+}
+
+export default function AnimatedStat({
+  label,
+  value,
+  decimals = 0,
+  suffix = '',
+  icon,
+  deltaLabel,
+  className = '',
+}: AnimatedStatProps) {
+  return (
+    <AnimatedCard className={`p-5 ${className}`} glowOnHover>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+          <CountUpNumber
+            value={value}
+            decimals={decimals}
+            suffix={suffix}
+            className="mt-2 block text-2xl font-bold text-zinc-950"
+          />
+          {deltaLabel && <p className="mt-2 text-xs font-medium text-teal-600 animate-fade-up">{deltaLabel}</p>}
+        </div>
+        {icon && (
+          <div className="rounded-xl bg-zinc-900/90 p-3 text-white transition-transform duration-300 group-hover:scale-110">
+            {icon}
+          </div>
+        )}
+      </div>
+    </AnimatedCard>
+  );
+}
+
+EXPLANATION:
+- Stat card with count-up animation
+- Shows label, animated value, optional icon
+- Optional delta label (e.g., "+12% from last month")
+- Icon bounces on hover (scale-110)
+- Glow effect on hover
+- Example usage:
+  <AnimatedStat 
+    label="Total Users" 
+    value={1234} 
+    icon={<Users />} 
+    deltaLabel="+12%" 
+  />
+
+--------------------------------------------------------------------------------
+
+FILE: src/components/motion/MicroButton.tsx
+
+import { ButtonHTMLAttributes, MouseEvent, useState } from 'react';
+
+interface Ripple {
+  x: number;
+  y: number;
+  id: number;
+}
+
+type MicroButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  glow?: boolean;
+};
+
+export default function MicroButton({ children, className = '', glow = false, onClick, ...rest }: MicroButtonProps) {
+  const [ripples, setRipples] = useState<Ripple[]>([]);
+
+  const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ripple = { x: e.clientX - rect.left, y: e.clientY - rect.top, id: Date.now() };
+    setRipples((prev) => [...prev, ripple]);
+    window.setTimeout(() => {
+      setRipples((prev) => prev.filter((r) => r.id !== ripple.id));
+    }, 450);
+    onClick?.(e);
+  };
+
+  return (
+    <button
+      {...rest}
+      onClick={handleClick}
+      className={`group relative overflow-hidden rounded-xl px-5 py-2.5 font-medium transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] hover:-translate-y-0.5 hover:shadow-convio-card-hover disabled:translate-y-0 disabled:opacity-60 ${
+        glow ? 'shadow-convio-glow' : ''
+      } ${className}`}
+    >
+      <span className="relative z-10 inline-flex items-center gap-2">{children}</span>
+      {ripples.map((ripple) => (
+        <span
+          key={ripple.id}
+          className="pointer-events-none absolute h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30 animate-ripple"
+          style={{ left: ripple.x, top: ripple.y }}
+        />
+      ))}
+    </button>
+  );
+}
+
+EXPLANATION:
+- Button with ripple effect on click
+- Tracks click position and creates expanding circle
+- Ripple animates from click point outward
+- Hover: Slight lift + shadow expansion
+- Optional glow effect
+- Disabled state: No animation, reduced opacity
+- Ripple auto-removes after 450ms
+
+HOW RIPPLE WORKS:
+1. User clicks button
+2. Calculate click position relative to button
+3. Create ripple object with x, y, unique id
+4. Add to ripples array (triggers re-render)
+5. CSS animation expands circle from center
+6. After 450ms, remove ripple from array
+
+--------------------------------------------------------------------------------
+
+FILE: src/components/motion/StaggerContainer.tsx
+
+import { Children, ReactNode } from 'react';
+
+interface StaggerContainerProps {
+  children: ReactNode;
+  className?: string;
+  delayStepMs?: number;
+}
+
+export default function StaggerContainer({ children, className = '', delayStepMs = 80 }: StaggerContainerProps) {
+  const list = Children.toArray(children);
+
+  return (
+    <div className={className}>
+      {list.map((child, index) => (
+        <div
+          key={index}
+          className="animate-fade-up"
+          style={{ animationDelay: `${index * delayStepMs}ms`, animationFillMode: 'both' }}
+        >
+          {child}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+EXPLANATION:
+- Container that staggers child animations
+- Each child gets incremental delay
+- Creates cascade effect for lists
+- Default 80ms delay between items
+- Uses animate-fade-up (fade in + slide up)
+- animationFillMode: 'both' keeps initial state before animation starts
+
+EXAMPLE USAGE:
+<StaggerContainer delayStepMs={100}>
+  <Card>Item 1</Card>  {/* Delay: 0ms */}
+  <Card>Item 2</Card>  {/* Delay: 100ms */}
+  <Card>Item 3</Card>  {/* Delay: 200ms */}
+</StaggerContainer>
+
+--------------------------------------------------------------------------------
+
+FILE: src/components/motion/GlowBadge.tsx
+
+interface GlowBadgeProps {
+  label: string;
+  className?: string;
+}
+
+export default function GlowBadge({ label, className = '' }: GlowBadgeProps) {
+  return (
+    <span
+      className={`inline-flex items-center rounded-full border border-teal-400/40 bg-teal-500/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.15em] text-teal-700 shadow-convio-glow ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+EXPLANATION:
+- Badge with glow effect
+- Semi-transparent teal background
+- Subtle border
+- Uppercase text with wide letter spacing
+- Used for "AI Verified", "Premium", etc.
+
+--------------------------------------------------------------------------------
+
+FILE: src/components/motion/PulseIndicator.tsx
+
+interface PulseIndicatorProps {
+  label?: string;
+  className?: string;
+}
+
+export default function PulseIndicator({ label = 'Live', className = '' }: PulseIndicatorProps) {
+  return (
+    <span className={`inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.13em] text-emerald-700 ${className}`}>
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+      </span>
+      {label}
+    </span>
+  );
+}
+
+EXPLANATION:
+- Pulsing dot indicator
+- Two circles: one static, one pinging
+- animate-ping creates expanding ring effect
+- Used for "Live", "Active", "Recording" states
+- Emerald green color for positive/active state
+
+HOW PING WORKS:
+- Outer span: Expands and fades out (animate-ping)
+- Inner span: Solid dot that stays in place
+- Creates radar/sonar effect
+
+--------------------------------------------------------------------------------
+
+FILE: src/components/motion/AnimatedTooltip.tsx
+
+import { ReactNode } from 'react';
+
+interface AnimatedTooltipProps {
+  content: ReactNode;
+  children: ReactNode;
+  className?: string;
+}
+
+export default function AnimatedTooltip({ content, children, className = '' }: AnimatedTooltipProps) {
+  return (
+    <div className={`group relative inline-flex ${className}`}>
+      {children}
+      <div className="pointer-events-none absolute bottom-[calc(100%+8px)] left-1/2 z-20 w-max -translate-x-1/2 rounded-lg border border-zinc-200 bg-white/95 px-3 py-1.5 text-xs text-zinc-700 opacity-0 shadow-lg backdrop-blur-sm transition-all duration-200 group-hover:-translate-y-1 group-hover:opacity-100">
+        {content}
+      </div>
+    </div>
+  );
+}
+
+EXPLANATION:
+- Tooltip that appears on hover
+- Positioned above trigger element
+- Smooth fade + slide animation
+- Glass effect with backdrop blur
+- pointer-events-none prevents tooltip from blocking clicks
+- group/group-hover pattern for parent-child interaction
+
+POSITIONING:
+- bottom-[calc(100%+8px)]: 8px above trigger
+- left-1/2 + -translate-x-1/2: Horizontally centered
+- -translate-y-1 on hover: Slides up slightly
+
+--------------------------------------------------------------------------------
+
+FILE: src/components/motion/index.ts
+
+export { default as AnimatedCard } from './AnimatedCard';
+export { default as AnimatedProgressBar } from './AnimatedProgressBar';
+export { default as AnimatedStat } from './AnimatedStat';
+export { default as AnimatedTooltip } from './AnimatedTooltip';
+export { default as CountUpNumber } from './CountUpNumber';
+export { default as GlassContainer } from './GlassContainer';
+export { default as GlowBadge } from './GlowBadge';
+export { default as MicroButton } from './MicroButton';
+export { default as PulseIndicator } from './PulseIndicator';
+export { default as StaggerContainer } from './StaggerContainer';
+
+EXPLANATION:
+- Barrel export for clean imports
+- Allows: import { AnimatedCard, MicroButton } from '@/components/motion';
+- Instead of: import AnimatedCard from '@/components/motion/AnimatedCard';
+

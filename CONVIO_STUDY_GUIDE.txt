@@ -1,0 +1,1079 @@
+===============================================================================
+CONVIO UI UPGRADE - COMPLETE BEGINNER'S STUDY GUIDE
+===============================================================================
+
+This guide explains EVERY piece of code created for the Convio UI upgrade.
+Study this to understand modern React animations and premium UI design.
+
+===============================================================================
+PART 1: UNDERSTANDING THE DESIGN SYSTEM
+===============================================================================
+
+WHAT IS A DESIGN SYSTEM?
+A design system is a collection of reusable colors, spacing, and animation
+rules that keep your entire app looking consistent.
+
+-------------------------------------------------------------------------------
+FILE: src/design/theme.ts
+-------------------------------------------------------------------------------
+
+export const theme = {
+  color: {
+    neutral: {
+      950: '#09090B',  // Darkest (almost black)
+      900: '#18181B',
+      800: '#27272A',
+      700: '#3F3F46',
+      600: '#52525B',
+      500: '#71717A',  // Medium gray
+      400: '#A1A1AA',
+      300: '#D4D4D8',
+      200: '#E4E4E7',
+      100: '#F4F4F5',
+      50: '#FAFAFA',   // Lightest (almost white)
+    },
+    primary: '#39D4AA',    // Teal - main brand color
+    secondary: '#3BA2FF',  // Blue - accent color
+    success: '#10B981',    // Green - success messages
+    warning: '#F59E0B',    // Orange - warnings
+    danger: '#F43F5E',     // Red - errors
+  },
+  shadow: {
+    card: '0 8px 30px rgba(2, 6, 23, 0.08)',
+    cardHover: '0 14px 38px rgba(2, 6, 23, 0.14)',
+    glowPrimary: '0 0 0 1px rgba(57, 212, 170, 0.35), 0 10px 35px rgba(57, 212, 170, 0.24)',
+  },
+  radius: {
+    lg: '14px',
+    xl: '18px',
+    xxl: '22px',
+  },
+  motion: {
+    fast: '180ms',
+    normal: '260ms',
+    slow: '420ms',
+    curve: 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+  },
+} as const;
+
+WHY THIS MATTERS:
+- Instead of writing '#39D4AA' everywhere, you write theme.color.primary
+- If you want to change the brand color, change it once here
+- All components automatically update
+
+HOW TO USE:
+import { theme } from '@/design/theme';
+<div style={{ color: theme.color.primary }}>Hello</div>
+
+===============================================================================
+PART 2: ANIMATION HOOKS (THE MAGIC BEHIND SMOOTH ANIMATIONS)
+===============================================================================
+
+-------------------------------------------------------------------------------
+FILE: src/design/motion.ts - useReducedMotion Hook
+-------------------------------------------------------------------------------
+
+export function useReducedMotion() {
+  const [reduced, setReduced] = useState(false);
+
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduced(media.matches);
+    const handler = () => setReduced(media.matches);
+    media.addEventListener('change', handler);
+    return () => media.removeEventListener('change', handler);
+  }, []);
+
+  return reduced;
+}
+
+WHAT IT DOES:
+Checks if the user has "reduce motion" enabled in their OS settings.
+Some users get dizzy from animations, so we respect their preference.
+
+HOW IT WORKS:
+1. window.matchMedia checks the user's system preference
+2. If they want reduced motion, reduced = true
+3. Other components can skip animations if reduced = true
+
+EXAMPLE:
+const reduced = useReducedMotion();
+if (reduced) {
+  // Show final state immediately
+} else {
+  // Play smooth animation
+}
+
+-------------------------------------------------------------------------------
+FILE: src/design/motion.ts - useCountUp Hook
+-------------------------------------------------------------------------------
+
+export function useCountUp(target: number, duration = 900, decimals = 0, start = true) {
+  const reducedMotion = useReducedMotion();
+  const [value, setValue] = useState(0);
+
+  useEffect(() => {
+    if (!start) {
+      setValue(0);
+      return;
+    }
+
+    if (reducedMotion) {
+      setValue(target);
+      return;
+    }
+
+    let rafId = 0;
+    let startTime = 0;
+
+    const animate = (timestamp: number) => {
+      if (!startTime) {
+        startTime = timestamp;
+      }
+
+      const progress = Math.min((timestamp - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      setValue(target * eased);
+
+      if (progress < 1) {
+        rafId = window.requestAnimationFrame(animate);
+      }
+    };
+
+    rafId = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(rafId);
+  }, [target, duration, reducedMotion, start]);
+
+  return useMemo(() => Number(value.toFixed(decimals)), [value, decimals]);
+}
+
+WHAT IT DOES:
+Animates a number from 0 to target (e.g., 0 → 1234)
+
+HOW IT WORKS STEP-BY-STEP:
+
+1. START:
+   - value starts at 0
+   - target = 1234 (what we want to reach)
+   - duration = 900ms (how long animation takes)
+
+2. ANIMATION LOOP:
+   - requestAnimationFrame calls animate() every frame (~60 times per second)
+   - timestamp = current time in milliseconds
+   - progress = how far through animation (0 to 1)
+     Example: After 450ms, progress = 450/900 = 0.5 (halfway)
+
+3. EASING:
+   - eased = 1 - Math.pow(1 - progress, 3)
+   - This creates "ease out" effect (fast start, slow end)
+   - Example: progress=0.5 → eased=0.875 (moves faster at start)
+
+4. UPDATE VALUE:
+   - setValue(target * eased)
+   - Example: 1234 * 0.875 = 1080
+   - React re-renders with new value
+
+5. REPEAT:
+   - If progress < 1, call animate() again next frame
+   - When progress = 1, animation stops
+
+WHY requestAnimationFrame?
+- Syncs with browser's refresh rate (smooth 60fps)
+- Pauses when tab is hidden (saves battery)
+- GPU-optimized
+
+EXAMPLE USAGE:
+const count = useCountUp(1234, 900, 0, true);
+return <span>{count}</span>;  // Shows: 0 → 123 → 456 → 789 → 1234
+
+-------------------------------------------------------------------------------
+FILE: src/design/motion.ts - useRafProgress Hook
+-------------------------------------------------------------------------------
+
+export function useRafProgress(progress: number, duration = 700) {
+  const reducedMotion = useReducedMotion();
+  const [current, setCurrent] = useState(0);
+
+  useEffect(() => {
+    if (reducedMotion) {
+      setCurrent(progress);
+      return;
+    }
+
+    let rafId = 0;
+    let startTime = 0;
+    const startValue = current;
+    const delta = progress - startValue;
+
+    const animate = (timestamp: number) => {
+      if (!startTime) {
+        startTime = timestamp;
+      }
+      const t = Math.min((timestamp - startTime) / duration, 1);
+      const eased = 1 - Math.pow(1 - t, 3);
+      setCurrent(startValue + delta * eased);
+      if (t < 1) {
+        rafId = requestAnimationFrame(animate);
+      }
+    };
+
+    rafId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(rafId);
+  }, [progress, duration, reducedMotion]);
+
+  return current;
+}
+
+WHAT IT DOES:
+Smoothly animates progress bar from current value to new value
+
+DIFFERENCE FROM useCountUp:
+- useCountUp: Always starts from 0
+- useRafProgress: Starts from current value
+
+EXAMPLE:
+Progress bar at 30%, user completes task, now 60%
+- Without animation: 30% → 60% (instant jump)
+- With useRafProgress: 30% → 35% → 40% → 45% → ... → 60% (smooth)
+
+HOW IT WORKS:
+1. startValue = 30 (current position)
+2. progress = 60 (new target)
+3. delta = 60 - 30 = 30 (how much to move)
+4. Each frame: current = 30 + (30 * eased)
+5. Result: Smooth transition from 30 to 60
+
+===============================================================================
+PART 3: REUSABLE COMPONENTS
+===============================================================================
+
+-------------------------------------------------------------------------------
+COMPONENT 1: GlassContainer
+-------------------------------------------------------------------------------
+
+import { HTMLAttributes, ReactNode } from 'react';
+
+interface GlassContainerProps extends HTMLAttributes<HTMLDivElement> {
+  children: ReactNode;
+}
+
+export default function GlassContainer({ children, className = '', ...props }: GlassContainerProps) {
+  return (
+    <div {...props} className={`convio-glass ${className}`}>
+      {children}
+    </div>
+  );
+}
+
+WHAT IT DOES:
+Creates a "glass" effect (semi-transparent with blur)
+
+CSS (in index.css):
+.convio-glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.58));
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8px 30px rgba(2, 6, 23, 0.08);
+  backdrop-filter: blur(12px);
+  border-radius: 18px;
+}
+
+BREAKDOWN:
+- background: Semi-transparent white gradient
+- backdrop-filter: blur(12px): Blurs content behind it
+- border: Subtle white border
+- box-shadow: Soft shadow for depth
+
+USAGE:
+<GlassContainer>
+  <p>This content has a glass effect!</p>
+</GlassContainer>
+
+-------------------------------------------------------------------------------
+COMPONENT 2: CountUpNumber
+-------------------------------------------------------------------------------
+
+import { useCountUp } from '../../design/motion';
+
+interface CountUpNumberProps {
+  value: number;
+  decimals?: number;
+  suffix?: string;
+  prefix?: string;
+  duration?: number;
+  className?: string;
+}
+
+export default function CountUpNumber({
+  value,
+  decimals = 0,
+  suffix = '',
+  prefix = '',
+  duration = 900,
+  className = '',
+}: CountUpNumberProps) {
+  const animated = useCountUp(value, duration, decimals, true);
+
+  return <span className={className}>{`${prefix}${animated.toFixed(decimals)}${suffix}`}</span>;
+}
+
+WHAT IT DOES:
+Displays a number that animates from 0 to value
+
+EXAMPLE USAGE:
+<CountUpNumber value={85} suffix="%" />
+Result: 0% → 10% → 25% → 50% → 75% → 85%
+
+<CountUpNumber value={1234} prefix="$" decimals={2} />
+Result: $0.00 → $123.40 → $617.00 → $1234.00
+
+WHY IT'S USEFUL:
+Makes dashboards feel alive and premium
+
+
+-------------------------------------------------------------------------------
+COMPONENT 3: AnimatedProgressBar
+-------------------------------------------------------------------------------
+
+import { useRafProgress } from '../../design/motion';
+
+interface AnimatedProgressBarProps {
+  value: number;
+  max?: number;
+  className?: string;
+  trackClassName?: string;
+  indicatorClassName?: string;
+  showGlowTrail?: boolean;
+}
+
+export default function AnimatedProgressBar({
+  value,
+  max = 100,
+  className = '',
+  trackClassName = '',
+  indicatorClassName = '',
+  showGlowTrail = false,
+}: AnimatedProgressBarProps) {
+  const pct = Math.max(0, Math.min(100, (value / max) * 100));
+  const animatedPct = useRafProgress(pct);
+
+  return (
+    <div className={`relative h-2.5 overflow-hidden rounded-full bg-zinc-200/90 ${trackClassName} ${className}`}>
+      <div
+        className={`h-full rounded-full bg-gradient-to-r from-teal-400 to-cyan-500 transition-[width] duration-700 ease-[cubic-bezier(0.2,0.8,0.2,1)] ${indicatorClassName}`}
+        style={{ width: `${animatedPct}%` }}
+      />
+      {showGlowTrail && (
+        <div
+          className="pointer-events-none absolute inset-y-0 w-16 bg-gradient-to-r from-transparent via-white/50 to-transparent"
+          style={{ left: `calc(${animatedPct}% - 2rem)` }}
+        />
+      )}
+    </div>
+  );
+}
+
+WHAT IT DOES:
+Progress bar that smoothly fills from left to right
+
+HOW IT WORKS:
+
+1. CALCULATE PERCENTAGE:
+   pct = (value / max) * 100
+   Example: value=75, max=100 → pct=75%
+
+2. ANIMATE:
+   animatedPct = useRafProgress(pct)
+   Smoothly transitions width from current to new percentage
+
+3. RENDER:
+   - Outer div: Gray track (background)
+   - Inner div: Teal-to-cyan gradient (fill)
+   - Width changes smoothly: width: 75%
+
+4. GLOW TRAIL (optional):
+   - White gradient that follows the fill edge
+   - Creates "scanning" effect
+   - Positioned at: left: calc(75% - 2rem)
+
+USAGE:
+<AnimatedProgressBar value={75} showGlowTrail />
+
+-------------------------------------------------------------------------------
+COMPONENT 4: MicroButton (WITH RIPPLE EFFECT)
+-------------------------------------------------------------------------------
+
+import { ButtonHTMLAttributes, MouseEvent, useState } from 'react';
+
+interface Ripple {
+  x: number;
+  y: number;
+  id: number;
+}
+
+type MicroButtonProps = ButtonHTMLAttributes<HTMLButtonElement> & {
+  glow?: boolean;
+};
+
+export default function MicroButton({ 
+  children, 
+  className = '', 
+  glow = false, 
+  onClick, 
+  ...rest 
+}: MicroButtonProps) {
+  const [ripples, setRipples] = useState<Ripple[]>([]);
+
+  const handleClick = (e: MouseEvent<HTMLButtonElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const ripple = { 
+      x: e.clientX - rect.left, 
+      y: e.clientY - rect.top, 
+      id: Date.now() 
+    };
+    setRipples((prev) => [...prev, ripple]);
+    window.setTimeout(() => {
+      setRipples((prev) => prev.filter((r) => r.id !== ripple.id));
+    }, 450);
+    onClick?.(e);
+  };
+
+  return (
+    <button
+      {...rest}
+      onClick={handleClick}
+      className={`group relative overflow-hidden rounded-xl px-5 py-2.5 font-medium transition-all duration-300 ease-[cubic-bezier(0.2,0.8,0.2,1)] hover:-translate-y-0.5 hover:shadow-convio-card-hover disabled:translate-y-0 disabled:opacity-60 ${
+        glow ? 'shadow-convio-glow' : ''
+      } ${className}`}
+    >
+      <span className="relative z-10 inline-flex items-center gap-2">{children}</span>
+      {ripples.map((ripple) => (
+        <span
+          key={ripple.id}
+          className="pointer-events-none absolute h-20 w-20 -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/30 animate-ripple"
+          style={{ left: ripple.x, top: ripple.y }}
+        />
+      ))}
+    </button>
+  );
+}
+
+WHAT IT DOES:
+Button with Material Design ripple effect on click
+
+HOW RIPPLE WORKS STEP-BY-STEP:
+
+1. USER CLICKS BUTTON:
+   - Click happens at screen position (500px, 300px)
+
+2. CALCULATE CLICK POSITION RELATIVE TO BUTTON:
+   const rect = e.currentTarget.getBoundingClientRect();
+   // rect = { left: 400, top: 250, width: 100, height: 50 }
+   
+   x = e.clientX - rect.left = 500 - 400 = 100px (from left edge)
+   y = e.clientY - rect.top = 300 - 250 = 50px (from top edge)
+
+3. CREATE RIPPLE OBJECT:
+   ripple = { x: 100, y: 50, id: 1234567890 }
+   
+4. ADD TO STATE:
+   setRipples([...prev, ripple])
+   // This triggers re-render
+
+5. RENDER RIPPLE:
+   <span style={{ left: 100, top: 50 }} />
+   // Circle appears at click position
+   // CSS animation expands it outward
+
+6. REMOVE AFTER 450ms:
+   setTimeout(() => {
+     setRipples(prev => prev.filter(r => r.id !== 1234567890))
+   }, 450)
+
+CSS ANIMATION (in tailwind.config.ts):
+ripple: {
+  '0%': { transform: 'scale(0.25)', opacity: '0.45' },
+  '100%': { transform: 'scale(1.6)', opacity: '0' }
+}
+
+RESULT:
+- Circle starts small and visible
+- Expands to 1.6x size
+- Fades out
+- Gets removed from DOM
+
+USAGE:
+<MicroButton glow onClick={() => alert('Clicked!')}>
+  Submit
+</MicroButton>
+
+-------------------------------------------------------------------------------
+COMPONENT 5: AnimatedStat
+-------------------------------------------------------------------------------
+
+import { ReactNode } from 'react';
+import AnimatedCard from './AnimatedCard';
+import CountUpNumber from './CountUpNumber';
+
+interface AnimatedStatProps {
+  label: string;
+  value: number;
+  decimals?: number;
+  suffix?: string;
+  icon?: ReactNode;
+  deltaLabel?: string;
+  className?: string;
+}
+
+export default function AnimatedStat({
+  label,
+  value,
+  decimals = 0,
+  suffix = '',
+  icon,
+  deltaLabel,
+  className = '',
+}: AnimatedStatProps) {
+  return (
+    <AnimatedCard className={`p-5 ${className}`} glowOnHover>
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-zinc-500">{label}</p>
+          <CountUpNumber
+            value={value}
+            decimals={decimals}
+            suffix={suffix}
+            className="mt-2 block text-2xl font-bold text-zinc-950"
+          />
+          {deltaLabel && <p className="mt-2 text-xs font-medium text-teal-600 animate-fade-up">{deltaLabel}</p>}
+        </div>
+        {icon && (
+          <div className="rounded-xl bg-zinc-900/90 p-3 text-white transition-transform duration-300 group-hover:scale-110">
+            {icon}
+          </div>
+        )}
+      </div>
+    </AnimatedCard>
+  );
+}
+
+WHAT IT DOES:
+Dashboard stat card with count-up animation
+
+EXAMPLE USAGE:
+import { Users } from 'lucide-react';
+
+<AnimatedStat 
+  label="Total Users" 
+  value={1234} 
+  icon={<Users />} 
+  deltaLabel="+12% from last month" 
+/>
+
+RESULT:
+┌─────────────────────────────┐
+│ TOTAL USERS          [👥]  │
+│ 1234        (counts up)     │
+│ +12% from last month        │
+└─────────────────────────────┘
+
+FEATURES:
+- Glass card with hover lift
+- Number counts from 0 → 1234
+- Icon scales up on hover
+- Delta label fades in
+- Glow effect on hover
+
+-------------------------------------------------------------------------------
+COMPONENT 6: StaggerContainer
+-------------------------------------------------------------------------------
+
+import { Children, ReactNode } from 'react';
+
+interface StaggerContainerProps {
+  children: ReactNode;
+  className?: string;
+  delayStepMs?: number;
+}
+
+export default function StaggerContainer({ 
+  children, 
+  className = '', 
+  delayStepMs = 80 
+}: StaggerContainerProps) {
+  const list = Children.toArray(children);
+
+  return (
+    <div className={className}>
+      {list.map((child, index) => (
+        <div
+          key={index}
+          className="animate-fade-up"
+          style={{ 
+            animationDelay: `${index * delayStepMs}ms`, 
+            animationFillMode: 'both' 
+          }}
+        >
+          {child}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+WHAT IT DOES:
+Makes list items appear one after another (cascade effect)
+
+HOW IT WORKS:
+
+1. CONVERT CHILDREN TO ARRAY:
+   const list = Children.toArray(children);
+   // [<Card>1</Card>, <Card>2</Card>, <Card>3</Card>]
+
+2. WRAP EACH CHILD:
+   Each child gets wrapped in a div with animation
+
+3. CALCULATE DELAY:
+   - Item 0: delay = 0 * 80 = 0ms
+   - Item 1: delay = 1 * 80 = 80ms
+   - Item 2: delay = 2 * 80 = 160ms
+
+4. ANIMATION:
+   animate-fade-up: Fades in + slides up
+   animationFillMode: 'both' keeps initial state (invisible) until animation starts
+
+RESULT:
+Item 1 appears at 0ms
+Item 2 appears at 80ms
+Item 3 appears at 160ms
+Creates smooth cascade effect
+
+USAGE:
+<StaggerContainer delayStepMs={100}>
+  <Card>Interview 1</Card>
+  <Card>Interview 2</Card>
+  <Card>Interview 3</Card>
+</StaggerContainer>
+
+-------------------------------------------------------------------------------
+COMPONENT 7: PulseIndicator
+-------------------------------------------------------------------------------
+
+interface PulseIndicatorProps {
+  label?: string;
+  className?: string;
+}
+
+export default function PulseIndicator({ 
+  label = 'Live', 
+  className = '' 
+}: PulseIndicatorProps) {
+  return (
+    <span className={`inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.13em] text-emerald-700 ${className}`}>
+      <span className="relative flex h-2.5 w-2.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+      </span>
+      {label}
+    </span>
+  );
+}
+
+WHAT IT DOES:
+Pulsing dot indicator (like "Live" on YouTube)
+
+HOW IT WORKS:
+
+1. TWO CIRCLES:
+   - Outer: Expands and fades (animate-ping)
+   - Inner: Solid dot (stays in place)
+
+2. PING ANIMATION:
+   @keyframes ping {
+     0% { transform: scale(1); opacity: 1; }
+     75%, 100% { transform: scale(2); opacity: 0; }
+   }
+
+3. RESULT:
+   ● → ◉ → ⭕ → (invisible) → ● (repeat)
+   Creates radar/sonar effect
+
+USAGE:
+<PulseIndicator label="Recording" />
+<PulseIndicator label="Active" />
+
+RESULT: 🟢 LIVE
+
+
+===============================================================================
+PART 4: TAILWIND CONFIGURATION
+===============================================================================
+
+FILE: tailwind.config.ts
+
+This file extends Tailwind CSS with custom animations and colors.
+
+-------------------------------------------------------------------------------
+CUSTOM COLORS
+-------------------------------------------------------------------------------
+
+colors: {
+  convio: {
+    neutral: {
+      50: '#FAFAFA',   // Almost white
+      100: '#F4F4F5',
+      // ... (full scale)
+      950: '#09090B'   // Almost black
+    },
+    primary: '#39D4AA',    // Teal
+    secondary: '#3BA2FF',  // Blue
+    success: '#10B981',    // Green
+    warning: '#F59E0B',    // Orange
+    danger: '#F43F5E'      // Red
+  }
+}
+
+USAGE IN CODE:
+<div className="bg-convio-primary text-convio-neutral-50">
+  Teal background, white text
+</div>
+
+-------------------------------------------------------------------------------
+CUSTOM SHADOWS
+-------------------------------------------------------------------------------
+
+boxShadow: {
+  'convio-card': '0 8px 30px rgba(2, 6, 23, 0.08)',
+  'convio-card-hover': '0 14px 38px rgba(2, 6, 23, 0.14)',
+  'convio-glow': '0 0 0 1px rgba(57, 212, 170, 0.35), 0 10px 35px rgba(57, 212, 170, 0.24)'
+}
+
+BREAKDOWN:
+- convio-card: Soft shadow for cards
+- convio-card-hover: Larger shadow on hover (creates lift effect)
+- convio-glow: Teal glow effect (border + outer glow)
+
+USAGE:
+<div className="shadow-convio-card hover:shadow-convio-card-hover">
+  Card with hover effect
+</div>
+
+-------------------------------------------------------------------------------
+CUSTOM ANIMATIONS
+-------------------------------------------------------------------------------
+
+keyframes: {
+  'fade-up': {
+    '0%': { opacity: '0', transform: 'translateY(10px)' },
+    '100%': { opacity: '1', transform: 'translateY(0)' }
+  },
+  ripple: {
+    '0%': { transform: 'translate(-50%, -50%) scale(0.25)', opacity: '0.45' },
+    '100%': { transform: 'translate(-50%, -50%) scale(1.6)', opacity: '0' }
+  },
+  'soft-pulse': {
+    '0%, 100%': { opacity: '1' },
+    '50%': { opacity: '0.55' }
+  },
+  shimmer: {
+    '0%': { transform: 'translateX(-120%)' },
+    '100%': { transform: 'translateX(220%)' }
+  },
+  'bar-grow': {
+    '0%': { transform: 'scaleY(0.2)', transformOrigin: 'bottom' },
+    '100%': { transform: 'scaleY(1)', transformOrigin: 'bottom' }
+  }
+}
+
+animation: {
+  'fade-up': 'fade-up 380ms cubic-bezier(0.2, 0.8, 0.2, 1) both',
+  ripple: 'ripple 450ms cubic-bezier(0.2, 0.8, 0.2, 1) both',
+  'soft-pulse': 'soft-pulse 2s ease-in-out infinite',
+  shimmer: 'shimmer 1.6s linear infinite',
+  'bar-grow': 'bar-grow 700ms cubic-bezier(0.2, 0.8, 0.2, 1) both'
+}
+
+EXPLANATION OF EACH:
+
+1. fade-up:
+   - Starts: Invisible, 10px below
+   - Ends: Visible, normal position
+   - Use: List items appearing
+
+2. ripple:
+   - Starts: Small circle, semi-visible
+   - Ends: Large circle, invisible
+   - Use: Button click feedback
+
+3. soft-pulse:
+   - Loops: Full opacity → 55% opacity → Full
+   - Use: "Live" indicators
+
+4. shimmer:
+   - Moves: Left to right
+   - Use: Loading skeleton
+
+5. bar-grow:
+   - Grows: From 20% height to 100%
+   - Origin: Bottom (grows upward)
+   - Use: Chart bars
+
+USAGE:
+<div className="animate-fade-up">Fades in and slides up</div>
+<div className="animate-soft-pulse">Pulses forever</div>
+
+===============================================================================
+PART 5: GLOBAL CSS STYLES
+===============================================================================
+
+FILE: src/index.css
+
+-------------------------------------------------------------------------------
+BACKGROUND GRADIENT
+-------------------------------------------------------------------------------
+
+body {
+  background-image:
+    radial-gradient(1200px 640px at 12% -12%, rgba(57, 212, 170, 0.16), transparent 60%),
+    radial-gradient(920px 520px at 92% 8%, rgba(59, 162, 255, 0.16), transparent 56%),
+    radial-gradient(840px 520px at 40% 92%, rgba(15, 23, 42, 0.08), transparent 62%);
+  background-attachment: fixed;
+}
+
+WHAT IT DOES:
+Creates subtle colored gradients in background
+
+BREAKDOWN:
+- First gradient: Teal glow at top-left
+- Second gradient: Blue glow at top-right
+- Third gradient: Dark glow at bottom
+- background-attachment: fixed: Doesn't scroll with page
+
+RESULT: Soft, professional background with depth
+
+-------------------------------------------------------------------------------
+GLASS EFFECT
+-------------------------------------------------------------------------------
+
+.convio-glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.76), rgba(255, 255, 255, 0.58));
+  border: 1px solid rgba(255, 255, 255, 0.72);
+  box-shadow: 0 8px 30px rgba(2, 6, 23, 0.08);
+  backdrop-filter: blur(12px);
+  border-radius: 18px;
+}
+
+BREAKDOWN:
+- background: Semi-transparent white gradient (76% → 58% opacity)
+- border: Subtle white border
+- box-shadow: Soft shadow for depth
+- backdrop-filter: blur(12px): BLURS CONTENT BEHIND IT
+- border-radius: Rounded corners
+
+WHY IT LOOKS LIKE GLASS:
+- Semi-transparent: You can see through it
+- Blur: Content behind is blurred (like frosted glass)
+- Gradient: Creates depth and reflection effect
+
+-------------------------------------------------------------------------------
+ANIMATED MESH BACKGROUND
+-------------------------------------------------------------------------------
+
+.convio-mesh-bg {
+  background-image:
+    radial-gradient(140% 140% at 0% 0%, rgba(57, 212, 170, 0.25), transparent 45%),
+    radial-gradient(80% 120% at 100% 0%, rgba(59, 162, 255, 0.28), transparent 55%),
+    linear-gradient(140deg, rgba(12, 22, 33, 1), rgba(35, 48, 64, 0.96));
+  background-size: 120% 120%;
+  animation: convioMeshDrift 8s ease-in-out infinite alternate;
+}
+
+@keyframes convioMeshDrift {
+  0% { background-position: 0% 0%, 100% 0%, center; }
+  100% { background-position: 8% 8%, 94% 6%, center; }
+}
+
+WHAT IT DOES:
+Animated gradient background that slowly moves
+
+BREAKDOWN:
+- Three gradients layered on top of each other
+- background-size: 120%: Larger than container (allows movement)
+- Animation: Shifts position over 8 seconds
+- alternate: Goes back and forth
+
+RESULT: Subtle, living background
+
+-------------------------------------------------------------------------------
+LINK UNDERLINE ANIMATION
+-------------------------------------------------------------------------------
+
+.convio-link-line {
+  position: relative;
+}
+
+.convio-link-line::after {
+  content: '';
+  position: absolute;
+  left: 0.25rem;
+  right: 0.25rem;
+  bottom: -0.35rem;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(57, 212, 170, 0.95), transparent);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 320ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.convio-link-line:hover::after {
+  transform: scaleX(1);
+}
+
+WHAT IT DOES:
+Animated underline that slides in on hover
+
+HOW IT WORKS:
+
+1. INITIAL STATE:
+   - ::after creates invisible line below text
+   - transform: scaleX(0): Width = 0 (invisible)
+   - transform-origin: left: Grows from left
+
+2. ON HOVER:
+   - transform: scaleX(1): Width = 100%
+   - Transition: Smooth 320ms animation
+
+3. RESULT:
+   Text → Text (underline slides in from left)
+
+USAGE:
+<a className="convio-link-line">Hover me</a>
+
+===============================================================================
+PART 6: HOW TO USE IN YOUR PROJECT
+===============================================================================
+
+STEP 1: COPY FILES
+Copy these folders to your project:
+- src/design/
+- src/components/motion/
+
+STEP 2: UPDATE TAILWIND CONFIG
+Merge tailwind.config.ts with your existing config
+
+STEP 3: UPDATE GLOBAL CSS
+Add the CSS from index.css to your global styles
+
+STEP 4: USE COMPONENTS
+
+Example Dashboard:
+
+import { AnimatedStat, StaggerContainer, AnimatedCard } from '@/components/motion';
+import { Users, TrendingUp } from 'lucide-react';
+
+function Dashboard() {
+  return (
+    <div className="p-6">
+      <div className="grid grid-cols-3 gap-4">
+        <AnimatedStat 
+          label="Total Users" 
+          value={1234} 
+          icon={<Users />}
+          deltaLabel="+12%"
+        />
+        <AnimatedStat 
+          label="Revenue" 
+          value={45678} 
+          prefix="$"
+          icon={<TrendingUp />}
+        />
+      </div>
+
+      <StaggerContainer className="mt-6 space-y-4">
+        <AnimatedCard className="p-4">
+          <h3>Recent Activity</h3>
+        </AnimatedCard>
+        <AnimatedCard className="p-4">
+          <h3>Top Performers</h3>
+        </AnimatedCard>
+      </StaggerContainer>
+    </div>
+  );
+}
+
+===============================================================================
+PART 7: KEY CONCEPTS TO REMEMBER
+===============================================================================
+
+1. requestAnimationFrame:
+   - Browser API for smooth animations
+   - Runs at 60fps
+   - GPU-optimized
+
+2. Easing Functions:
+   - Linear: Constant speed
+   - Ease-out: Fast start, slow end
+   - cubic-bezier(0.2, 0.8, 0.2, 1): Custom smooth curve
+
+3. Transform vs Position:
+   - transform: translateY(-4px) → GPU-accelerated, smooth
+   - top: -4px → CPU-based, can be janky
+   - ALWAYS use transform for animations
+
+4. Opacity vs Visibility:
+   - opacity: 0 → Can animate smoothly
+   - visibility: hidden → Cannot animate
+   - Use opacity for fade effects
+
+5. Glassmorphism:
+   - Semi-transparent background
+   - backdrop-filter: blur()
+   - Subtle border and shadow
+
+6. Stagger Animation:
+   - Delay each item by fixed amount
+   - Creates cascade effect
+   - Makes lists feel alive
+
+7. Ripple Effect:
+   - Track click position
+   - Create expanding circle
+   - Remove after animation
+
+8. Count-up Animation:
+   - Start at 0
+   - Increment each frame
+   - Use easing for smooth motion
+
+===============================================================================
+PRACTICE EXERCISES
+===============================================================================
+
+1. Create a stat card that shows your age and counts up
+
+2. Build a progress bar that fills to 75%
+
+3. Make a button with ripple effect
+
+4. Create a list of 5 items with stagger animation
+
+5. Build a "Live" indicator with pulse
+
+6. Design a glass card with your favorite content
+
+7. Animate a number from 0 to 100 with 2 decimal places
+
+8. Create a tooltip that appears on hover
+
+===============================================================================
+END OF STUDY GUIDE
+===============================================================================
+
+You now understand:
+✓ Design systems and theme tokens
+✓ Animation hooks (useCountUp, useRafProgress)
+✓ Reusable motion components
+✓ Tailwind custom animations
+✓ Glassmorphism and modern UI effects
+✓ Performance-optimized animations
+
+Apply these concepts to build premium, professional dashboards!

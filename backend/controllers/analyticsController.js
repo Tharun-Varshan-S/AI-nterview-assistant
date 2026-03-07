@@ -4,6 +4,7 @@ const Resume = require('../models/Resume');
 const SkillScoringEngine = require('../engines/skillScoringEngine');
 const SkillTrajectoryEngine = require('../engines/skillTrajectoryEngine');
 const ResumeConsistencyAnalyzer = require('../services/resumeConsistencyAnalyzer');
+const ReadinessCalculator = require('../services/readinessCalculator');
 const logger = require('../utils/logger');
 
 const asyncHandler = require('../utils/asyncHandler');
@@ -47,7 +48,9 @@ const aggregateSkillPerformance = (interviews) => {
       if (!question || !question.topic) return;
 
       const topic = question.topic;
-      const score = answer.aiEvaluation?.score || answer.score || 0;
+      const score = answer.isCodingAnswer
+        ? answer.aiEvaluation?.finalCodingScore || answer.aiEvaluation?.score || answer.score || 0
+        : answer.aiEvaluation?.score || answer.score || 0;
 
       if (!skillData[topic]) {
         skillData[topic] = { scores: [], count: 0, avgScore: 0 };
@@ -112,7 +115,9 @@ const calculateCodingVsTheory = (interviews) => {
 
   interviews.forEach((interview) => {
     (interview.answers || []).forEach((answer) => {
-      const score = answer.aiEvaluation?.score || answer.score || 0;
+      const score = answer.isCodingAnswer
+        ? answer.aiEvaluation?.finalCodingScore || answer.aiEvaluation?.score || answer.score || 0
+        : answer.aiEvaluation?.score || answer.score || 0;
       if (answer.isCodingAnswer) {
         codingTotal += score;
         codingCount += 1;
@@ -180,7 +185,9 @@ const getSkillDetails = (interviews, skillName) => {
 
         if (question.topic.toLowerCase() !== skillName.toLowerCase()) return;
 
-        const score = answer.aiEvaluation?.score || answer.score || 0;
+        const score = answer.isCodingAnswer
+          ? answer.aiEvaluation?.finalCodingScore || answer.aiEvaluation?.score || answer.score || 0
+          : answer.aiEvaluation?.score || answer.score || 0;
         scores.push({
           score,
           date: new Date(answer.submittedAt).toLocaleDateString(),
@@ -240,6 +247,7 @@ exports.getOverviewAnalytics = asyncHandler(async (req, res, next) => {
     .lean();
 
   let readinessScore = 0;
+  let readinessLevel = 'Not Ready';
   let avgInterviewScore = 0;
   let codingAccuracy = 0;
   let theoreticalAccuracy = 0;
@@ -253,7 +261,9 @@ exports.getOverviewAnalytics = asyncHandler(async (req, res, next) => {
 
     interviews.forEach((interview) => {
       (interview.answers || []).forEach((answer) => {
-        const score = answer.aiEvaluation?.score || answer.score || 0;
+        const score = answer.isCodingAnswer
+          ? answer.aiEvaluation?.finalCodingScore || answer.aiEvaluation?.score || answer.score || 0
+          : answer.aiEvaluation?.score || answer.score || 0;
         if (answer.isCodingAnswer) {
           codingScores.push(score);
         } else {
@@ -273,8 +283,14 @@ exports.getOverviewAnalytics = asyncHandler(async (req, res, next) => {
   const learningVelocity = calculateLearningVelocity(interviews);
   const consistencyScore = calculateConsistencyScore(interviews);
 
-  readinessScore =
-    0.4 * avgInterviewScore + 0.3 * codingAccuracy + 0.2 * consistencyScore + 0.1 * learningVelocity;
+  const readiness = ReadinessCalculator.calculate({
+    avgInterviewScore,
+    codingAccuracy,
+    consistencyScore,
+    learningVelocity
+  });
+  readinessScore = readiness.readinessScore;
+  readinessLevel = readiness.level;
 
   const skillBreakdown = aggregateSkillPerformance(interviews);
   const skillsArray = Object.entries(skillBreakdown).map(([skill, data]) => ({
@@ -288,7 +304,8 @@ exports.getOverviewAnalytics = asyncHandler(async (req, res, next) => {
     success: true,
     data: {
       readinessScore: Math.round(readinessScore),
-      readinessPercentage: Math.min(100, Math.round(readinessScore * 10)),
+      readinessLevel,
+      readinessPercentage: Math.min(100, Math.round(readinessScore)),
       strongestSkill: skillsArray.length > 0 ? skillsArray[0].skill : 'N/A',
       weakestSkill: skillsArray.length > 0 ? skillsArray[skillsArray.length - 1].skill : 'N/A',
       totalSessions: interviews.length + practiceSessions.length,

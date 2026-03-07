@@ -46,7 +46,9 @@ const buildPracticeQuestions = async ({ mode, topic, difficulty, questionCount }
         primaryDomain: mode
       },
       rawText: `Practice mode: ${mode}. Topic: ${topic}.`,
-      focusTopics: [topic]
+      focusTopics: [topic],
+      questionCount,
+      interviewType: mode === 'coding' ? 'coding' : 'theoretical'
     });
 
     const questions = Array.isArray(generated?.questions) ? generated.questions : [];
