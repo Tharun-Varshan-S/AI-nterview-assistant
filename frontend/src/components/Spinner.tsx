@@ -1,4 +1,12 @@
-export default function Spinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
+import { cn } from '@/lib/utils';
+
+export default function Spinner({
+  size = 'md',
+  className,
+}: {
+  size?: 'sm' | 'md' | 'lg';
+  className?: string;
+}) {
   const sizeClasses = {
     sm: 'w-4 h-4',
     md: 'w-8 h-8',
@@ -6,7 +14,7 @@ export default function Spinner({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) 
   };
 
   return (
-    <div className="flex items-center justify-center">
+    <div className={cn('flex items-center justify-center', className)}>
       <div
         className={`${sizeClasses[size]} border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin`}
       />

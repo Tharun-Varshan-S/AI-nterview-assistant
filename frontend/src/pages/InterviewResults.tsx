@@ -4,52 +4,52 @@ import { interviewAPI, Interview, ResumeConsistencyReport, AdaptiveHistoryEvent 
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
 import DifficultyBadge from '../components/DifficultyBadge';
-import { Award, TrendingUp, CheckCircle, XCircle, Lightbulb, ArrowLeft, AlertCircle, Code2, FileText, Zap, TrendingDown, Target } from 'lucide-react';
+import {
+  Award,
+  TrendingUp,
+  CheckCircle,
+  XCircle,
+  Lightbulb,
+  ArrowLeft,
+  AlertCircle,
+  Code2,
+  FileText,
+  Zap,
+  TrendingDown,
+  Target,
+  BarChart3,
+  Calendar,
+  History
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Tooltip as ShadTooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger
+} from '@/components/ui/tooltip';
 
 // Helper component for safe score display
-const ScoreDisplay = ({ score, label, color = 'blue' }: { score?: number; label: string; color?: string }) => {
-  const colorClasses = {
-    blue: 'bg-blue-50 border-blue-200 text-blue-700',
-    emerald: 'bg-emerald-50 border-emerald-200 text-emerald-700',
-    purple: 'bg-purple-50 border-purple-200 text-purple-700',
-    amber: 'bg-amber-50 border-amber-200 text-amber-700',
-  };
-  
+const ScoreCard = ({ score, label, icon: Icon, description }: { score?: number; label: string; icon: any; description?: string }) => {
   const displayScore = score ?? 0;
   const formattedScore = typeof displayScore === 'number' ? displayScore.toFixed(1) : '0.0';
-  
-  return (
-    <div className={`rounded-lg border p-4 ${colorClasses[color as keyof typeof colorClasses] || colorClasses.blue}`}>
-      <p className="text-sm font-medium text-slate-600 mb-1">{label}</p>
-      <div className="text-2xl font-bold">{formattedScore}</div>
-    </div>
-  );
-};
 
-// Helper component for list items
-const ListItem = ({ text, icon, color }: { text: string; icon: string; color: string }) => (
-  <li className="text-sm flex items-start gap-2">
-    <span className={`mt-1 ${color}`}>{icon}</span>
-    <span className="text-slate-700">{text}</span>
-  </li>
-);
-
-// Interview Type Badge Component
-const InterviewTypeBadge = ({ type }: { type?: string }) => {
-  const typeConfig = {
-    theoretical: { bg: 'bg-blue-100', text: 'text-blue-700', icon: FileText },
-    coding: { bg: 'bg-purple-100', text: 'text-purple-700', icon: Code2 },
-    mixed: { bg: 'bg-amber-100', text: 'text-amber-700', icon: Zap },
-  };
-  
-  const config = typeConfig[type as keyof typeof typeConfig] || typeConfig.theoretical;
-  const Icon = config.icon;
-  
   return (
-    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full ${config.bg} ${config.text} text-sm font-medium`}>
-      <Icon size={16} />
-      <span className="capitalize">{type || 'theoretical'}</span>
-    </div>
+    <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm transition-all duration-200 hover:shadow-md bg-white dark:bg-zinc-950/50">
+      <CardHeader className="pb-2 flex flex-row items-center justify-between space-y-0">
+        <CardTitle className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</CardTitle>
+        <Icon size={14} className="text-muted-foreground" />
+      </CardHeader>
+      <CardContent>
+        <div className="text-3xl font-heading font-bold lining-nums">{formattedScore}</div>
+        {description && <p className="text-[10px] text-muted-foreground mt-1">{description}</p>}
+      </CardContent>
+    </Card>
   );
 };
 
@@ -75,17 +75,17 @@ export default function InterviewResults() {
         interviewAPI.getConsistency(id!).catch(() => null),
         interviewAPI.getAdaptiveHistory(id!).catch(() => []),
       ]);
-      
+
       if (data.status !== 'completed') {
-        setError('Interview is not completed yet');
+        setError('Evaluation engine processing. Please check back in a few moments.');
         return;
       }
-      
+
       setInterview(data);
       setConsistency(consistencyData);
       setAdaptiveHistory(historyData || []);
     } catch (err: any) {
-      const errorMsg = err.response?.data?.message || 'Failed to load results';
+      const errorMsg = err.response?.data?.message || 'Failed to load repository data';
       setError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -103,499 +103,352 @@ export default function InterviewResults() {
 
   if (error || !interview) {
     return (
-      <div className="max-w-5xl mx-auto space-y-4">
-        <button
-          onClick={() => navigate('/candidate/dashboard')}
-          className="flex items-center gap-2 text-slate-600 hover:text-slate-900"
-        >
-          <ArrowLeft size={20} />
-          Back to Dashboard
-        </button>
-        <div className="rounded-lg border-2 border-red-200 bg-red-50 p-6 text-center">
-          <AlertCircle className="mx-auto mb-3 text-red-600" size={32} />
-          <p className="text-sm font-medium text-red-800">{error || 'Failed to load results'}</p>
-          <button
-            onClick={() => navigate('/candidate/dashboard')}
-            className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
-          >
+      <div className="max-w-2xl mx-auto py-12 px-4 text-center space-y-6">
+        <div className="p-12 rounded-3xl border-2 border-dashed border-zinc-200 dark:border-zinc-800">
+          <AlertCircle className="mx-auto mb-4 text-zinc-400" size={48} />
+          <h2 className="text-2xl font-heading font-bold mb-2">Issue Loading Results</h2>
+          <p className="text-muted-foreground mb-8">{error || 'The requested evaluation could not be retrieved.'}</p>
+          <Button onClick={() => navigate('/candidate/dashboard')} variant="outline" className="rounded-xl px-8">
             Return to Dashboard
-          </button>
+          </Button>
         </div>
       </div>
     );
   }
 
   const getScoreLabel = (score: number) => {
-    if (score >= 8) return 'Excellent';
-    if (score >= 6) return 'Good';
-    if (score >= 4) return 'Fair';
-    return 'Needs Improvement';
+    if (score >= 8.5) return 'Exceptional';
+    if (score >= 7) return 'Above Benchmark';
+    if (score >= 5) return 'Baseline Met';
+    return 'Room for Growth';
   };
 
   const finalEvaluation = interview.finalEvaluation;
   const consistencyReport = consistency || finalEvaluation?.resumeConsistency;
   const trajectory = finalEvaluation?.skillTrajectory || [];
   const overallScore = interview.averageScore || 0;
-  const skillPerformanceRecord =
-    interview.skillPerformance instanceof Map
-      ? Object.fromEntries(interview.skillPerformance.entries())
-      : (interview.skillPerformance || {});
-  const weakestSkill = Object.values(skillPerformanceRecord).sort((a, b) => a.score - b.score)[0]?.topicName;
-
-  const getDifficultyShift = (current?: string, previous?: string) => {
-    const order = ['easy', 'medium', 'hard'];
-    const currentIndex = order.indexOf(current || '');
-    const previousIndex = order.indexOf(previous || '');
-    if (currentIndex < 0 || previousIndex < 0 || currentIndex === previousIndex) {
-      return null;
-    }
-    return currentIndex > previousIndex ? 'up' : 'down';
-  };
 
   return (
-    <div className="max-w-6xl mx-auto space-y-8">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate('/candidate/dashboard')}
-        className="flex items-center gap-2 text-slate-600 hover:text-slate-900"
-      >
-        <ArrowLeft size={20} />
-        Back to Dashboard
-      </button>
-
-      {/* Overall Score Card with Interview Type */}
-      <div className="bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 rounded-2xl shadow-xl p-8 text-white">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Interview Results</h1>
-            <p className="text-slate-200">
-              Completed on {new Date(interview.updatedAt).toLocaleString()}
-            </p>
-          </div>
-          <InterviewTypeBadge type={interview.interviewType} />
-        </div>
-        
-        <div className="flex items-center justify-between">
-          <div className="flex-1">
-            <div className="mt-4 h-2 rounded-full bg-white/15">
-              <div
-                className="h-2 rounded-full bg-emerald-400"
-                style={{ width: `${Math.min(100, overallScore * 10)}%` }}
-              />
+    <div className="max-w-6xl mx-auto space-y-10 py-4 animate-in fade-in slide-in-from-bottom-4 duration-700">
+      {/* Header & Meta */}
+      <section className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+        <div className="space-y-4">
+          <Button
+            variant="ghost"
+            onClick={() => navigate('/candidate/dashboard')}
+            className="gap-2 -ml-2 text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <ArrowLeft size={16} /> Workspace Analytics
+          </Button>
+          <div className="space-y-1">
+            <h1 className="text-4xl md:text-5xl font-heading font-bold tracking-tight">Performance Summary</h1>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground font-medium">
+              <span className="flex items-center gap-1.5"><Calendar size={14} /> {new Date(interview.updatedAt).toLocaleDateString()}</span>
+              <span className="flex items-center gap-1.5"><Target size={14} /> REC ID: {interview._id.slice(-8).toUpperCase()}</span>
             </div>
           </div>
-          <div className="text-center ml-8">
-            <Award size={48} className="mx-auto mb-2" />
-            <div className="text-5xl font-bold">{overallScore.toFixed(1)}</div>
-            <p className="text-lg mt-1">{getScoreLabel(overallScore)}</p>
-</div>
         </div>
-      </div>
-
-      {/* Score Breakdown - 3 Distinct Blocks */}
-      <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
-        <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-          <TrendingUp size={24} />
-          Performance Summary
-        </h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <ScoreDisplay
-            score={overallScore}
-            label="Overall Score"
-            color="blue"
-          />
-          <ScoreDisplay
-            score={interview.theoreticalScore}
-            label="Theoretical Score"
-            color="emerald"
-          />
-          <ScoreDisplay
-            score={interview.codingScore}
-            label="Coding Score"
-            color="purple"
-          />
-          <ScoreDisplay
-            score={interview.questions?.length || 0}
-            label="Total Questions"
-            color="amber"
-          />
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="rounded-lg px-3 py-1.5 font-bold uppercase tracking-wider text-[10px] border-zinc-200 dark:border-zinc-800">
+            {interview.interviewType || 'THEORETICAL'}
+          </Badge>
+          <Badge variant="secondary" className="rounded-lg px-3 py-1.5 font-bold uppercase tracking-wider text-[10px]">
+            VERIFIED
+          </Badge>
         </div>
-      </div>
+      </section>
 
-      {/* Intelligence Panels */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
-          <h2 className="text-xl font-semibold mb-4">Resume Consistency Report</h2>
-          {consistencyReport ? (
-            <div className="space-y-3 text-sm text-slate-700">
-              <p>
-                Resume Claim Accuracy: <span className="font-semibold">{consistencyReport.resumeClaimAccuracy}%</span>
-              </p>
-              <p>Verified Strengths: {(consistencyReport.verifiedStrengths || []).join(', ') || 'None'}</p>
-              <p>Inflated Skills: {(consistencyReport.inflatedSkills || []).join(', ') || 'None'}</p>
-              <p>Underutilized Skills: {(consistencyReport.underutilizedSkills || []).join(', ') || 'None'}</p>
-            </div>
-          ) : (
-            <p className="text-sm text-slate-500">Consistency data unavailable for this session.</p>
-          )}
+      {/* Aggregate Score Section */}
+      <Card className="overflow-hidden border-0 bg-zinc-950 text-white shadow-2xl relative">
+        <div className="absolute top-0 right-0 w-1/2 h-full opacity-20 pointer-events-none">
+          <div className="absolute inset-0 bg-gradient-to-l from-zinc-500/30 to-transparent" />
         </div>
 
-        <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
-          <h2 className="text-xl font-semibold mb-4">Skill Trajectory</h2>
-          {trajectory.length > 0 ? (
-            <div className="space-y-3">
-              {trajectory.slice(0, 5).map((entry, idx) => (
-                <div key={`${entry.topic}-${idx}`} className="rounded-lg border border-slate-200 p-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="font-medium text-slate-900">{entry.topic}</span>
-                    <span className="text-slate-600">{entry.currentLevel}</span>
-                  </div>
-                  <div className="mt-2 text-xs text-slate-600">
-                    Growth: {entry.growthRate} | Trend: {entry.improvementTrend} {entry.plateauDetected ? '| Plateau detected' : ''}
-                  </div>
+        <CardContent className="p-8 md:p-12 relative z-10">
+          <div className="flex flex-col md:flex-row justify-between items-center gap-12">
+            <div className="flex-1 space-y-8 w-full">
+              <div className="space-y-2">
+                <div className="flex justify-between items-end mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.3em] text-zinc-500">System Percentile Proficiency</span>
+                  <span className="text-2xl font-heading font-bold lining-nums">{(overallScore * 10).toFixed(0)}%</span>
                 </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-slate-500">Complete more interviews to build trajectory analytics.</p>
-          )}
-        </div>
-      </div>
-
-      {adaptiveHistory.length > 0 && (
-        <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
-          <h2 className="text-xl font-semibold mb-4">Difficulty Evolution Timeline</h2>
-          <div className="space-y-2">
-            {adaptiveHistory.map((event, idx) => (
-              <div key={`${event.questionIndex}-${idx}`} className="text-sm text-slate-700 rounded-lg border border-slate-200 p-3">
-                Q{event.questionIndex + 1}: {event.previousDifficulty} → {event.newDifficulty} (score {event.previousScore?.toFixed?.(1) || event.previousScore}) | {event.reason}
+                <Progress value={overallScore * 10} className="h-2 bg-zinc-900" indicatorClassName="bg-white" />
               </div>
-            ))}
-          </div>
-        </div>
-      )}
 
-      {/* Final Evaluation Summary */}
-      {finalEvaluation && (
-        <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
-          <h2 className="text-xl font-semibold mb-4">Final Evaluation</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Strengths */}
-            <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4">
-              <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                <CheckCircle size={18} className="text-emerald-600" />
-                Strengths
-              </h4>
-              {finalEvaluation.strengths && finalEvaluation.strengths.length > 0 ? (
-                <ul className="space-y-2">
-                  {finalEvaluation.strengths.map((strength, i) => (
-                    <ListItem key={i} text={strength} icon="✓" color="text-emerald-600" />
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-slate-500 italic">No strengths available</p>
-              )}
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-8">
+                <div>
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Theoretical</p>
+                  <p className="text-2xl font-heading font-bold">{interview.theoreticalScore?.toFixed(1) || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Coding</p>
+                  <p className="text-2xl font-heading font-bold">{interview.codingScore?.toFixed(1) || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-1">Segments</p>
+                  <p className="text-2xl font-heading font-bold">{interview.questions?.length || 0}</p>
+                </div>
+              </div>
             </div>
 
-            {/* Weaknesses */}
-            <div className="rounded-lg border border-rose-200 bg-rose-50 p-4">
-              <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                <XCircle size={18} className="text-rose-600" />
-                Weaknesses
-              </h4>
-              {finalEvaluation.weaknesses && finalEvaluation.weaknesses.length > 0 ? (
-                <ul className="space-y-2">
-                  {finalEvaluation.weaknesses.map((weakness, i) => (
-                    <ListItem key={i} text={weakness} icon="✗" color="text-rose-600" />
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-slate-500 italic">No weaknesses identified</p>
-              )}
-            </div>
-
-            {/* Recommendations */}
-            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-4">
-              <h4 className="text-sm font-semibold text-slate-900 mb-3 flex items-center gap-2">
-                <Lightbulb size={18} className="text-yellow-600" />
-                Recommendations
-              </h4>
-              {finalEvaluation.recommendations && finalEvaluation.recommendations.length > 0 ? (
-                <ul className="space-y-2">
-                  {finalEvaluation.recommendations.map((rec, i) => (
-                    <ListItem key={i} text={rec} icon="💡" color="text-yellow-600" />
-                  ))}
-                </ul>
-              ) : (
-                <p className="text-sm text-slate-500 italic">No recommendations available</p>
-              )}
+            <div className="flex items-center gap-8 bg-zinc-900/50 backdrop-blur-xl p-8 rounded-3xl border border-zinc-800/50 min-w-[280px]">
+              <div className="text-center">
+                <Award size={48} className="mx-auto mb-3 text-zinc-400" />
+                <div className="text-6xl font-heading font-bold tracking-tighter lining-nums">
+                  {overallScore.toFixed(1)}
+                </div>
+                <p className="text-sm font-semibold text-zinc-300 mt-1">{getScoreLabel(overallScore)}</p>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        </CardContent>
+      </Card>
 
-      {/* Interview Q&A with Conditional Evaluation Panels */}
-      <div className="bg-white/80 rounded-2xl shadow-sm border border-white/60 p-6 backdrop-blur">
-        <h2 className="text-xl font-semibold mb-4">Interview Q&A</h2>
-        <div className="space-y-6">
-          {interview.answers && interview.answers.length > 0 ? (
-            interview.answers.map((answer, index) => {
-              const question = interview.questions?.[index];
-              const previousDifficulty = index > 0 ? interview.questions?.[index - 1]?.difficulty : undefined;
-              const difficultyShift = getDifficultyShift(question?.difficulty, previousDifficulty);
-              const targetingWeakSkill =
-                Boolean(question?.targetingWeakSkill) || Boolean(question?.topic && weakestSkill && question.topic === weakestSkill);
-              return (
-                <div key={index} className="border border-slate-200 rounded-xl p-6 bg-white/80 hover:shadow-md transition-shadow">
-                  {/* Question Header with Metadata */}
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2 flex-wrap">
-                        <span className="text-sm font-medium text-slate-500">Question {index + 1}</span>
-                        {question && <DifficultyBadge difficulty={question.difficulty} />}
-                        {question?.topic && (
-                          <span className="px-2 py-1 bg-indigo-100 text-indigo-700 text-xs rounded-full">
-                            {question.topic}
-                          </span>
-                        )}
-                        {question?.domain && (
-                          <span className="px-2 py-1 bg-cyan-100 text-cyan-700 text-xs rounded-full">
-                            {question.domain}
-                          </span>
-                        )}
-                        {difficultyShift === 'up' && (
-                          <span className="px-2 py-1 bg-emerald-100 text-emerald-700 text-xs rounded-full inline-flex items-center gap-1">
-                            <TrendingUp size={12} />
-                            Difficulty Increased
-                          </span>
-                        )}
-                        {difficultyShift === 'down' && (
-                          <span className="px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full inline-flex items-center gap-1">
-                            <TrendingDown size={12} />
-                            Difficulty Decreased
-                          </span>
-                        )}
-                        {targetingWeakSkill && (
-                          <span className="px-2 py-1 bg-rose-100 text-rose-700 text-xs rounded-full inline-flex items-center gap-1">
-                            <Target size={12} />
-                            Targeting weak skill
-                          </span>
-                        )}
-                        {answer.isCodingAnswer && (
-                          <span className="px-2 py-1 bg-purple-100 text-purple-700 text-xs rounded-full flex items-center gap-1">
-                            <Code2 size={12} />
-                            Coding Question
-                          </span>
-                        )}
-                      </div>
-                      <h3 className="text-base font-medium text-slate-900">{answer.question}</h3>
+      {/* Intelligence & Analytics Grids */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 space-y-8">
+          {/* Consistency Scan */}
+          <Card className="border-zinc-200 dark:border-zinc-800 shadow-none bg-zinc-50/50 dark:bg-zinc-950/20 overflow-hidden">
+            <CardHeader className="border-b border-zinc-200/50 dark:border-zinc-800/50 bg-white/50 dark:bg-transparent pb-4">
+              <CardTitle className="text-sm font-bold flex items-center gap-2 uppercase tracking-widest">
+                <Target size={16} className="text-zinc-500" /> Resume Alignment Protocol
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-6">
+              {consistencyReport ? (
+                <div className="grid md:grid-cols-2 gap-8">
+                  <div className="space-y-4">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase text-muted-foreground mb-3 tracking-widest">Score Accuracy</p>
+                      <div className="text-4xl font-heading font-bold mb-1">{consistencyReport.resumeClaimAccuracy}%</div>
+                      <p className="text-xs text-muted-foreground leading-relaxed">Statistical correlation between self-reported skills and evaluation performance.</p>
                     </div>
                   </div>
-
-                  {/* Answer */}
-                  <div className="mb-4">
-                    <h4 className="text-sm font-medium text-slate-700 mb-2">Your Answer:</h4>
-                    <div className={`rounded-lg p-4 text-sm border ${
-                      answer.isCodingAnswer 
-                        ? 'bg-slate-900 text-slate-100 border-slate-700 font-mono' 
-                        : 'bg-slate-50 text-slate-800 border-slate-200'
-                    }`}>
-                      {answer.response || 'No response provided'}
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-bold uppercase text-muted-foreground tracking-widest block">Verified Competencies</span>
+                      <div className="flex flex-wrap gap-2">
+                        {consistencyReport.verifiedStrengths?.map(s => <Badge key={s} variant="secondary" className="text-[10px] uppercase font-bold">{s}</Badge>)}
+                      </div>
                     </div>
-                    {answer.isCodingAnswer && answer.language && (
-                      <p className="text-xs text-slate-500 mt-1">Language: {answer.language}</p>
+                    {consistencyReport.inflatedSkills?.length > 0 && (
+                      <div className="space-y-2">
+                        <span className="text-[10px] font-bold uppercase text-rose-500 tracking-widest block">Accuracy Gaps</span>
+                        <div className="flex flex-wrap gap-2">
+                          {consistencyReport.inflatedSkills.map(s => <Badge key={s} variant="outline" className="text-[10px] uppercase font-bold border-rose-200 dark:border-rose-900 text-rose-600">{s}</Badge>)}
+                        </div>
+                      </div>
                     )}
                   </div>
-
-                  {/* Conditional Evaluation Panel */}
-                  {answer.aiEvaluation && (
-                    answer.isCodingAnswer ? (
-                      /* CODING METRICS PANEL */
-                      <div className="bg-purple-50 border border-purple-200 rounded-lg p-4">
-                        <h4 className="text-sm font-semibold text-purple-900 mb-3 flex items-center gap-2">
-                          <Code2 size={16} />
-                          Coding Evaluation
-                        </h4>
-                        {answer.executionResult && (
-                          <div className="mb-3 grid grid-cols-2 md:grid-cols-4 gap-3 rounded-lg border border-purple-200 bg-white p-3">
-                            <div>
-                              <p className="text-xs text-purple-600 font-medium">Execution</p>
-                              <p className="text-lg font-bold text-purple-900">{answer.executionResult.executionScore}/10</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-purple-600 font-medium">Tests Passed</p>
-                              <p className="text-sm text-purple-900">{answer.executionResult.testCasesPassed}/{answer.executionResult.totalTestCases}</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-purple-600 font-medium">Exec Time</p>
-                              <p className="text-sm text-purple-900">{answer.executionResult.executionTimeMs}ms</p>
-                            </div>
-                            <div>
-                              <p className="text-xs text-purple-600 font-medium">Runtime Error</p>
-                              <p className="text-xs text-purple-900">{answer.executionResult.runtimeError || 'None'}</p>
-                            </div>
-                          </div>
-                        )}
-                        <div className="mb-3">
-                          <div className="flex items-center justify-between text-xs text-purple-700 mb-1">
-                            <span>Evaluation Confidence</span>
-                            <span>{answer.aiConfidenceScore ?? 0}%</span>
-                          </div>
-                          <div className="h-2 rounded-full bg-purple-100">
-                            <div
-                              className="h-2 rounded-full bg-purple-500"
-                              style={{ width: `${Math.min(100, answer.aiConfidenceScore || 0)}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mb-3">
-                          <div>
-                            <p className="text-xs text-purple-600 font-medium">Logic Score</p>
-                            <p className="text-lg font-bold text-purple-900">
-                              {answer.aiEvaluation.logicScore?.toFixed(1) || '—'}/10
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-purple-600 font-medium">Readability</p>
-                            <p className="text-lg font-bold text-purple-900">
-                              {answer.aiEvaluation.readabilityScore?.toFixed(1) || '—'}/10
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-purple-600 font-medium">Final Coding Score</p>
-                            <p className="text-lg font-bold text-purple-900">
-                              {answer.aiEvaluation.finalCodingScore?.toFixed(1) || '—'}/10
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-purple-600 font-medium">Time Complexity</p>
-                            <p className="text-sm font-mono text-purple-900">
-                              {answer.aiEvaluation.timeComplexity || '—'}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-purple-600 font-medium">Space Complexity</p>
-                            <p className="text-sm font-mono text-purple-900">
-                              {answer.aiEvaluation.spaceComplexity || '—'}
-                            </p>
-                          </div>
-                          <div className="col-span-2">
-                            <p className="text-xs text-purple-600 font-medium">Edge Case Handling</p>
-                            <p className="text-sm text-purple-900">
-                              {answer.aiEvaluation.edgeCaseHandling || 'Not evaluated'}
-                            </p>
-                          </div>
-                        </div>
-                        {answer.aiEvaluation.improvementSuggestions && answer.aiEvaluation.improvementSuggestions.length > 0 && (
-                          <div className="border-t border-purple-200 pt-3 mt-3">
-                            <p className="text-xs text-purple-600 font-medium mb-2">Improvement Suggestions:</p>
-                            <ul className="space-y-1">
-                              {answer.aiEvaluation.improvementSuggestions.map((suggestion, i) => (
-                                <li key={i} className="text-sm text-purple-900 flex items-start gap-2">
-                                  <span className="text-purple-400">→</span>
-                                  <span>{suggestion}</span>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      /* THEORETICAL METRICS PANEL */
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <h4 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
-                          <FileText size={16} />
-                          Theoretical Evaluation
-                        </h4>
-                        <div className="mb-3 text-xs text-blue-700">
-                          Confidence: {answer.aiConfidenceScore ?? '—'}% | Reliability: {answer.evaluationReliability ?? '—'} | Prompt: {answer.promptVersion || '—'}
-                        </div>
-                        <div className="mb-3">
-                          <div className="h-2 rounded-full bg-blue-100">
-                            <div
-                              className="h-2 rounded-full bg-blue-500"
-                              style={{ width: `${Math.min(100, answer.aiConfidenceScore || 0)}%` }}
-                            />
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
-                          <div>
-                            <p className="text-xs text-blue-600 font-medium">Score</p>
-                            <p className="text-lg font-bold text-blue-900">
-                              {answer.aiEvaluation.score?.toFixed(1) || '—'}/10
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-blue-600 font-medium">Technical Accuracy</p>
-                            <p className="text-sm text-blue-900">
-                              {answer.aiEvaluation.technicalAccuracy || '—'}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-blue-600 font-medium">Clarity</p>
-                            <p className="text-sm text-blue-900">
-                              {answer.aiEvaluation.clarity || '—'}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-xs text-blue-600 font-medium">Depth</p>
-                            <p className="text-sm text-blue-900">
-                              {answer.aiEvaluation.depth || '—'}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 border-t border-blue-200 pt-3">
-                          {answer.aiEvaluation.strengths && answer.aiEvaluation.strengths.length > 0 && (
-                            <div>
-                              <p className="text-xs text-blue-600 font-medium mb-1">Strengths:</p>
-                              <ul className="space-y-1">
-                                {answer.aiEvaluation.strengths.map((strength, i) => (
-                                  <li key={i} className="text-xs text-blue-900 flex items-start gap-1">
-                                    <span className="text-emerald-500">✓</span>
-                                    <span>{strength}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          {answer.aiEvaluation.weaknesses && answer.aiEvaluation.weaknesses.length > 0 && (
-                            <div>
-                              <p className="text-xs text-blue-600 font-medium mb-1">Weaknesses:</p>
-                              <ul className="space-y-1">
-                                {answer.aiEvaluation.weaknesses.map((weakness, i) => (
-                                  <li key={i} className="text-xs text-blue-900 flex items-start gap-1">
-                                    <span className="text-rose-500">✗</span>
-                                    <span>{weakness}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                          {answer.aiEvaluation.improvements && answer.aiEvaluation.improvements.length > 0 && (
-                            <div>
-                              <p className="text-xs text-blue-600 font-medium mb-1">Improvements:</p>
-                              <ul className="space-y-1">
-                                {answer.aiEvaluation.improvements.map((improvement, i) => (
-                                  <li key={i} className="text-xs text-blue-900 flex items-start gap-1">
-                                    <span className="text-yellow-500">💡</span>
-                                    <span>{improvement}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  )}
                 </div>
-              );
-            })
-          ) : (
-            <p className="text-sm text-slate-500 text-center py-8">No Q&A recorded</p>
+              ) : (
+                <p className="text-sm text-muted-foreground italic text-center py-4">No alignment data generated for this session.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Qualitative Evaluation */}
+          {finalEvaluation && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <Card className="border-0 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-none">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-xs font-bold flex items-center gap-2 text-emerald-800 dark:text-emerald-300 uppercase tracking-widest">
+                    <CheckCircle size={14} /> Core Strengths
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {finalEvaluation.strengths?.map((str, i) => (
+                    <div key={i} className="flex gap-3 text-sm text-emerald-900/80 dark:text-emerald-200/80 leading-relaxed">
+                      <span className="text-emerald-500 font-bold">✓</span> {str}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card className="border-0 bg-rose-50/50 dark:bg-rose-950/20 shadow-none">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-xs font-bold flex items-center gap-2 text-rose-800 dark:text-rose-300 uppercase tracking-widest">
+                    <XCircle size={14} /> Roadblocks
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {finalEvaluation.weaknesses?.map((weak, i) => (
+                    <div key={i} className="flex gap-3 text-sm text-rose-900/80 dark:text-rose-200/80 leading-relaxed">
+                      <span className="text-rose-400 font-bold">!</span> {weak}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card className="md:col-span-2 border-0 bg-zinc-100 dark:bg-zinc-800 shadow-none">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-xs font-bold flex items-center gap-2 text-zinc-800 dark:text-zinc-200 uppercase tracking-widest">
+                    <Lightbulb size={14} className="text-amber-500" /> Strategic Recommendations
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid md:grid-cols-2 gap-4">
+                  {finalEvaluation.recommendations?.map((rec, i) => (
+                    <div key={i} className="bg-white dark:bg-zinc-900 p-4 rounded-xl text-sm border border-zinc-200 dark:border-zinc-700 font-medium">
+                      {rec}
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
+
+        {/* Sidebar Analytics */}
+        <aside className="space-y-8">
+          {/* Skill Trajectory */}
+          <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+            <CardHeader className="bg-zinc-50 dark:bg-zinc-900/50">
+              <CardTitle className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                <Zap size={14} className="text-amber-500" /> Proficiency Helix
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="p-0">
+              <ScrollArea className="h-[400px]">
+                <div className="p-4 space-y-4">
+                  {trajectory.length > 0 ? (
+                    trajectory.map((entry, idx) => (
+                      <div key={idx} className="group space-y-2 pb-4 border-b border-zinc-100 dark:border-zinc-800 last:border-0 last:pb-0">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm font-bold truncate max-w-[140px]">{entry.topic}</span>
+                          <Badge variant="outline" className="text-[9px] font-bold border-zinc-300 dark:border-zinc-700">{entry.currentLevel.toUpperCase()}</Badge>
+                        </div>
+                        <div className="flex items-center gap-4 text-[10px] font-semibold text-muted-foreground uppercase tracking-tighter">
+                          <span>Growth: {entry.growthRate}</span>
+                          <span>Trend: {entry.improvementTrend}</span>
+                        </div>
+                        {entry.plateauDetected && (
+                          <div className="flex items-center gap-1.5 text-[9px] font-bold text-rose-500">
+                            <span className="h-1 w-1 rounded-full bg-rose-500 animate-pulse" /> SATURATION REACHED
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-xs text-muted-foreground italic text-center py-8">Baseline established. Subsequent sessions will build trajectory intel.</p>
+                  )}
+                </div>
+              </ScrollArea>
+            </CardContent>
+          </Card>
+
+          {/* Adaptive Engine History */}
+          {adaptiveHistory.length > 0 && (
+            <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                  <History size={14} /> Adaptive Load Log
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3 pt-0">
+                {adaptiveHistory.slice(-5).map((event, idx) => (
+                  <div key={idx} className="text-[11px] leading-relaxed p-3 rounded-lg border border-zinc-100 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 font-medium">
+                    <span className="text-muted-foreground mr-1">Q{event.questionIndex + 1}:</span>
+                    <span className="capitalize">{event.previousDifficulty}</span> → <span className="capitalize font-bold text-zinc-900 dark:text-zinc-100">{event.newDifficulty}</span>
+                    <p className="text-[9px] text-muted-foreground mt-1 leading-tight">{event.reason}</p>
+                  </div>
+                ))}
+              </CardContent>
+            </Card>
+          )}
+        </aside>
       </div>
+
+      {/* Transcript Log */}
+      <section className="space-y-8">
+        <div className="flex items-center justify-between">
+          <h2 className="text-3xl font-heading font-bold tracking-tight">Interview Ledger</h2>
+          <Badge variant="secondary" className="px-3 rounded-full font-mono text-xs">{interview.answers?.length} ENTRIES</Badge>
+        </div>
+
+        <div className="grid gap-8">
+          {interview.answers?.map((answer, index) => {
+            const question = interview.questions?.[index];
+            return (
+              <Card key={index} className="border-0 shadow-sm overflow-hidden bg-white dark:bg-zinc-950/50">
+                <div className="p-6 md:p-8 space-y-6">
+                  <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                    <div className="space-y-3 max-w-3xl">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" className="text-[10px] font-mono rounded">S-{index + 1}</Badge>
+                        {question && <DifficultyBadge difficulty={question.difficulty} />}
+                        {question?.topic && <Badge variant="outline" className="text-[10px] uppercase font-bold text-zinc-400 border-zinc-200 dark:border-zinc-800">{question.topic}</Badge>}
+                      </div>
+                      <h3 className="text-xl font-heading font-bold leading-tight">{answer.question}</h3>
+                    </div>
+                  </div>
+
+                  <div className="grid lg:grid-cols-5 gap-8">
+                    <div className="lg:col-span-3 space-y-3">
+                      <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Response Captured</p>
+                      <div className={`p-6 rounded-2xl text-sm leading-relaxed border ${answer.isCodingAnswer
+                          ? 'bg-zinc-950 text-emerald-400 font-mono border-zinc-800'
+                          : 'bg-zinc-50 dark:bg-zinc-900 text-foreground border-zinc-200/50 dark:border-zinc-800/50'
+                        }`}>
+                        {answer.response || "NO INPUT COLLECTED"}
+                      </div>
+                    </div>
+
+                    <div className="lg:col-span-2">
+                      {answer.aiEvaluation && (
+                        <div className={`h-full rounded-2xl p-6 border ${answer.isCodingAnswer
+                            ? 'bg-purple-50/50 dark:bg-purple-950/10 border-purple-100 dark:border-purple-900/30'
+                            : 'bg-blue-50/50 dark:bg-blue-950/10 border-blue-100 dark:border-blue-900/30'
+                          }`}>
+                          <div className="flex items-center justify-between mb-6">
+                            <span className="text-[10px] font-bold uppercase tracking-widest opacity-60">Evaluation Analytics</span>
+                            <div className="flex items-center gap-1.5 transition-all hover:scale-110">
+                              <span className="text-[10px] font-bold">SCORE</span>
+                              <span className="text-2xl font-heading font-bold lining-nums text-primary">{(answer.aiEvaluation.score || answer.aiEvaluation.finalCodingScore || 0).toFixed(1)}</span>
+                            </div>
+                          </div>
+
+                          <div className="space-y-4">
+                            {answer.isCodingAnswer ? (
+                              <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-[9px] font-bold uppercase opacity-50 mb-1">Time complexity</p>
+                                  <code className="text-xs font-mono text-purple-700 dark:text-purple-400">{answer.aiEvaluation.timeComplexity || '—'}</code>
+                                </div>
+                                <div>
+                                  <p className="text-[9px] font-bold uppercase opacity-50 mb-1">Space complexity</p>
+                                  <code className="text-xs font-mono text-purple-700 dark:text-purple-400">{answer.aiEvaluation.spaceComplexity || '—'}</code>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <div className="flex justify-between text-[10px] font-bold opacity-60">
+                                  <span>Technical Accuracy</span>
+                                  <span className="text-blue-600 dark:text-blue-400">{answer.aiEvaluation.technicalAccuracy}%</span>
+                                </div>
+                                <Progress value={Number(answer.aiEvaluation.technicalAccuracy) || 0} className="h-1" />
+                              </div>
+                            )}
+
+                            <Separator className="opacity-20" />
+
+                            <div className="space-y-2">
+                              <p className="text-[9px] font-bold uppercase opacity-50">Segment Insight</p>
+                              <p className="text-xs leading-relaxed font-medium">
+                                {answer.aiEvaluation.depth || answer.aiEvaluation.logicScore || 'Evaluation metrics computed successfully.'}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </Card>
+            );
+          })}
+        </div>
+      </section>
     </div>
   );
 }
+

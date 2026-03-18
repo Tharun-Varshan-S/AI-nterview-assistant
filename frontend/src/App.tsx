@@ -20,61 +20,65 @@ function LegacyInterviewRedirect({ targetPrefix }: { targetPrefix: string }) {
   return <Navigate to={`${targetPrefix}/${id || ''}`} replace />;
 }
 
+import { TooltipProvider } from './components/ui/tooltip';
+
 function App() {
   return (
     <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          {/* Public Routes */}
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/register" element={<RegisterPage />} />
+      <TooltipProvider>
+        <BrowserRouter>
+          <Routes>
+            {/* Public Routes */}
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/register" element={<RegisterPage />} />
 
-          {/* Candidate Routes */}
-          <Route
-            path="/candidate"
-            element={
-              <ProtectedRoute requiredRole="candidate">
-                <DashboardLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/candidate/dashboard" replace />} />
-            <Route path="dashboard" element={<CandidateDashboard />} />
-            <Route path="practice" element={<PracticePage />} />
-            <Route path="practice/:sessionId" element={<PracticeSessionPage />} />
-            <Route path="mock/setup" element={<MockSetupPage />} />
-            <Route path="analytics" element={<AnalyticsPage />} />
-            <Route path="interview/:id" element={<InterviewSession />} />
-            <Route path="results/:id" element={<InterviewResults />} />
-          </Route>
+            {/* Candidate Routes */}
+            <Route
+              path="/candidate"
+              element={
+                <ProtectedRoute requiredRole="candidate">
+                  <DashboardLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/candidate/dashboard" replace />} />
+              <Route path="dashboard" element={<CandidateDashboard />} />
+              <Route path="practice" element={<PracticePage />} />
+              <Route path="practice/:sessionId" element={<PracticeSessionPage />} />
+              <Route path="mock/setup" element={<MockSetupPage />} />
+              <Route path="analytics" element={<AnalyticsPage />} />
+              <Route path="interview/:id" element={<InterviewSession />} />
+              <Route path="results/:id" element={<InterviewResults />} />
+            </Route>
 
-          {/* Recruiter Routes */}
-          <Route
-            path="/recruiter"
-            element={
-              <ProtectedRoute requiredRole="recruiter">
-                <DashboardLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Navigate to="/recruiter/dashboard" replace />} />
-            <Route path="dashboard" element={<RecruiterDashboard />} />
-            <Route path="candidate/:id" element={<CandidateDetailView />} />
-          </Route>
+            {/* Recruiter Routes */}
+            <Route
+              path="/recruiter"
+              element={
+                <ProtectedRoute requiredRole="recruiter">
+                  <DashboardLayout />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Navigate to="/recruiter/dashboard" replace />} />
+              <Route path="dashboard" element={<RecruiterDashboard />} />
+              <Route path="candidate/:id" element={<CandidateDetailView />} />
+            </Route>
 
-          {/* Default Route */}
-          <Route path="/dashboard" element={<Navigate to="/candidate/dashboard" replace />} />
-          <Route path="/practice" element={<Navigate to="/candidate/practice" replace />} />
-          <Route path="/mock/setup" element={<Navigate to="/candidate/mock/setup" replace />} />
-          <Route path="/mock/:id" element={<LegacyInterviewRedirect targetPrefix="/candidate/interview" />} />
-          <Route path="/analytics" element={<Navigate to="/candidate/analytics" replace />} />
-          <Route path="/interview/:id/results" element={<LegacyInterviewRedirect targetPrefix="/candidate/results" />} />
-          <Route path="/" element={<Navigate to="/login" replace />} />
-          <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+            {/* Default Route */}
+            <Route path="/dashboard" element={<Navigate to="/candidate/dashboard" replace />} />
+            <Route path="/practice" element={<Navigate to="/candidate/practice" replace />} />
+            <Route path="/mock/setup" element={<Navigate to="/candidate/mock/setup" replace />} />
+            <Route path="/mock/:id" element={<LegacyInterviewRedirect targetPrefix="/candidate/interview" />} />
+            <Route path="/analytics" element={<Navigate to="/candidate/analytics" replace />} />
+            <Route path="/interview/:id/results" element={<LegacyInterviewRedirect targetPrefix="/candidate/results" />} />
+            <Route path="/" element={<Navigate to="/login" replace />} />
+            <Route path="*" element={<Navigate to="/login" replace />} />
+          </Routes>
 
-        <Toaster position="top-right" richColors expand={false} />
-      </BrowserRouter>
+          <Toaster position="top-right" richColors expand={false} />
+        </BrowserRouter>
+      </TooltipProvider>
     </AuthProvider>
   );
 }

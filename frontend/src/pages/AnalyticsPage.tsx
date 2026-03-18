@@ -19,6 +19,7 @@ import {
 import { analyticsAPI } from '../services/api';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
+import { Book } from 'lucide-react';
 
 export default function AnalyticsPage() {
   const [loading, setLoading] = useState(true);

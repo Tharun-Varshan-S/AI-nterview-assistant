@@ -12,7 +12,9 @@ import {
   Cell,
 } from 'recharts';
 import { Interview, SkillPerformance, DifficultyBreakdown } from '../services/api';
-import { AnimatedCard, CountUpNumber } from './motion';
+import { CountUpNumber } from './motion';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { useTheme } from '@/components/theme-provider';
 
 interface SkillAnalyticsDashboardProps {
   interviews: Interview[];
@@ -49,6 +51,7 @@ function normalizeDifficultyBreakdown(
 
 export default memo(function SkillAnalyticsDashboard({ interviews }: SkillAnalyticsDashboardProps) {
   const [hoverSkill, setHoverSkill] = useState<string | null>(null);
+  const { theme } = useTheme();
 
   const metrics = useMemo<AggregatedMetrics | null>(() => {
     const completed = interviews
@@ -120,153 +123,126 @@ export default memo(function SkillAnalyticsDashboard({ interviews }: SkillAnalyt
   }, [interviews]);
 
   if (!metrics) {
-    return <div className="p-8 text-center text-zinc-500">Complete interviews to see analytics.</div>;
+    return <div className="p-8 text-center text-muted-foreground border border-dashed rounded-xl">Complete interviews to see analytics.</div>;
   }
 
-  const skillSignals = [metrics.strongestSkill, metrics.weakestSkill].filter((skill) => skill && skill !== 'N/A');
+  const isDark = theme === 'dark';
+  const gridColor = isDark ? '#27272a' : '#e4e4e7';
+  const labelColor = isDark ? '#a1a1aa' : '#71717a';
 
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3 lg:grid-cols-6">
-        <MetricCard label="Total Interviews" value={metrics.interviewCount} />
-        <MetricCard label="Overall Average" value={metrics.overallScore} suffix="/10" decimals={1} />
-        <MetricCard label="Theoretical Avg" value={metrics.theoreticalScore} suffix="/10" decimals={1} />
+        <MetricCard label="Interviews" value={metrics.interviewCount} />
+        <MetricCard label="Overall Avg" value={metrics.overallScore} suffix="/10" decimals={1} />
+        <MetricCard label="Theory Avg" value={metrics.theoreticalScore} suffix="/10" decimals={1} />
         <MetricCard label="Coding Avg" value={metrics.codingScore} suffix="/10" decimals={1} />
-        <MetricLabel label="Strongest Skill" value={metrics.strongestSkill} highlight="positive" />
-        <MetricLabel label="Weakest Skill" value={metrics.weakestSkill} highlight="negative" pulse />
+        <MetricLabel label="Strongest" value={metrics.strongestSkill} highlight="positive" />
+        <MetricLabel label="Growth Need" value={metrics.weakestSkill} highlight="negative" />
       </div>
 
-      {skillSignals.length > 1 && (
-        <div className="rounded-xl border border-zinc-200 bg-zinc-50/80 p-3">
-          <p className="text-xs font-semibold uppercase tracking-[0.16em] text-zinc-500">Skill Relationship</p>
-          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm">
-            {skillSignals.map((skill, index) => (
-              <button
-                key={skill}
-                onMouseEnter={() => setHoverSkill(skill)}
-                onMouseLeave={() => setHoverSkill(null)}
-                className={`rounded-full border px-3 py-1 transition-all duration-300 ${
-                  hoverSkill === skill
-                    ? 'border-cyan-300 bg-cyan-100 text-cyan-800 shadow-convio-glow'
-                    : 'border-zinc-200 bg-white text-zinc-700'
-                }`}
-              >
-                {skill}
-              </button>
-            ))}
-            <span className="h-px w-12 bg-gradient-to-r from-teal-400 via-cyan-500 to-teal-400" />
-            <span className="text-zinc-500">Hover highlights connected skill focus.</span>
-          </div>
-        </div>
-      )}
-
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <AnimatedCard className="min-w-0 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-zinc-900">Performance Trend</h3>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-              <LineChart data={metrics.trend}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-                <XAxis dataKey="name" stroke="#71717a" fontSize={12} />
-                <YAxis domain={[0, 10]} stroke="#71717a" fontSize={12} />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 10,
-                    border: '1px solid #e4e4e7',
-                    background: 'rgba(255,255,255,0.94)',
-                    boxShadow: '0 10px 35px rgba(2, 6, 23, 0.12)',
-                    transform: 'scale(0.98)',
-                    transition: 'opacity 180ms ease, transform 180ms ease',
-                  }}
-                  formatter={(value: number | string | undefined) => `${Number(value || 0).toFixed(1)}/10`}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="score"
-                  stroke="#3BA2FF"
-                  strokeWidth={2.5}
-                  dot={{ r: 3.5, fill: '#39D4AA' }}
-                  activeDot={{ r: 6, fill: '#0EA5E9' }}
-                  isAnimationActive
-                  animationDuration={900}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        </AnimatedCard>
+        <Card className="shadow-sm border-zinc-200 dark:border-zinc-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="font-heading text-base font-semibold">Technical Trajectory</CardTitle>
+            <CardDescription className="text-xs">Performance score over sequential sessions</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={metrics.trend} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                  <XAxis dataKey="name" stroke={labelColor} fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis domain={[0, 10]} stroke={labelColor} fontSize={10} tickLine={false} axisLine={false} />
+                  <Tooltip
+                    contentStyle={{
+                      borderRadius: 8,
+                      border: isDark ? '1px solid #3f3f46' : '1px solid #e4e4e7',
+                      background: isDark ? '#18181b' : '#ffffff',
+                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                      fontSize: '12px'
+                    }}
+                    itemStyle={{ color: isDark ? '#f4f4f5' : '#18181b' }}
+                    labelStyle={{ color: labelColor, marginBottom: '4px' }}
+                    formatter={(value: number | undefined) => [`${(value || 0).toFixed(1)}/10`, 'Score']}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="score"
+                    stroke={isDark ? '#fafafa' : '#18181b'}
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: isDark ? '#fafafa' : '#18181b', strokeWidth: 0 }}
+                    activeDot={{ r: 5, strokeWidth: 0 }}
+                    animationDuration={1000}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
 
-        <AnimatedCard className="min-w-0 p-4">
-          <h3 className="mb-3 text-sm font-semibold text-zinc-900">Difficulty Breakdown</h3>
-          <div className="h-56">
-            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={220}>
-              <BarChart data={metrics.difficultyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e4e4e7" />
-                <XAxis dataKey="level" stroke="#71717a" fontSize={12} />
-                <YAxis stroke="#71717a" fontSize={12} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{
-                    borderRadius: 10,
-                    border: '1px solid #e4e4e7',
-                    background: 'rgba(255,255,255,0.94)',
-                    boxShadow: '0 10px 35px rgba(2, 6, 23, 0.12)',
-                  }}
-                />
-                <Bar dataKey="attempted" radius={[7, 7, 0, 0]} isAnimationActive animationDuration={760}>
-                  {metrics.difficultyData.map((entry, index) => (
-                    <Cell
-                      key={`${entry.level}-${index}`}
-                      fill={entry.level === 'Hard' ? '#F43F5E' : entry.level === 'Medium' ? '#F59E0B' : '#39D4AA'}
-                    />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </AnimatedCard>
+        <Card className="shadow-sm border-zinc-200 dark:border-zinc-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="font-heading text-base font-semibold">Adaptive Load</CardTitle>
+            <CardDescription className="text-xs">Distribution of questions by difficulty level</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-64 mt-4">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={metrics.difficultyData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
+                  <XAxis dataKey="level" stroke={labelColor} fontSize={10} tickLine={false} axisLine={false} />
+                  <YAxis stroke={labelColor} fontSize={10} tickLine={false} axisLine={false} allowDecimals={false} />
+                  <Tooltip
+                    cursor={{ fill: isDark ? '#27272a' : '#f4f4f5', opacity: 0.4 }}
+                    contentStyle={{
+                      borderRadius: 8,
+                      border: isDark ? '1px solid #3f3f46' : '1px solid #e4e4e7',
+                      background: isDark ? '#18181b' : '#ffffff',
+                      fontSize: '12px'
+                    }}
+                  />
+                  <Bar dataKey="attempted" radius={[4, 4, 0, 0]} animationDuration={800} barSize={40}>
+                    {metrics.difficultyData.map((entry, index) => (
+                      <Cell
+                        key={`cell-${index}`}
+                        fill={isDark ? '#52525b' : '#a1a1aa'}
+                        className="hover:fill-zinc-950 dark:hover:fill-zinc-100 transition-colors duration-200"
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
 });
 
-interface MetricCardProps {
-  label: string;
-  value: number;
-  suffix?: string;
-  decimals?: number;
-}
-
-function MetricCard({ label, value, suffix = '', decimals = 0 }: MetricCardProps) {
+function MetricCard({ label, value, suffix = '', decimals = 0 }: { label: string; value: number; suffix?: string; decimals?: number }) {
   return (
-    <AnimatedCard className="p-3" glowOnHover>
-      <p className="text-xs font-medium text-zinc-600">{label}</p>
-      <p className="mt-1 text-lg font-semibold text-zinc-900 break-words">
-        <CountUpNumber value={value} decimals={decimals} suffix={suffix} />
-      </p>
-    </AnimatedCard>
+    <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden bg-white dark:bg-zinc-950/50">
+      <CardContent className="p-4">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">{label}</p>
+        <p className="text-xl font-heading font-bold text-foreground">
+          <CountUpNumber value={value} decimals={decimals} suffix={suffix} />
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
-function MetricLabel({
-  label,
-  value,
-  highlight,
-  pulse = false,
-}: {
-  label: string;
-  value: string;
-  highlight: 'positive' | 'negative';
-  pulse?: boolean;
-}) {
+function MetricLabel({ label, value, highlight }: { label: string; value: string; highlight: 'positive' | 'negative' }) {
   return (
-    <AnimatedCard className="p-3" glowOnHover>
-      <p className="text-xs font-medium text-zinc-600">{label}</p>
-      <p
-        className={`mt-1 text-sm font-semibold break-words ${
-          highlight === 'positive' ? 'text-emerald-700' : 'text-rose-700'
-        } ${pulse ? 'animate-soft-pulse' : ''}`}
-      >
-        {value}
-      </p>
-    </AnimatedCard>
+    <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden bg-white dark:bg-zinc-950/50">
+      <CardContent className="p-4">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">{label}</p>
+        <p className={`text-sm font-semibold truncate ${highlight === 'positive' ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-500'}`}>
+          {value}
+        </p>
+      </CardContent>
+    </Card>
   );
 }

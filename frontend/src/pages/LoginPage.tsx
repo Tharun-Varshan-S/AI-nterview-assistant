@@ -4,6 +4,12 @@ import { useAuth } from '../context/AuthContext';
 import { authAPI } from '../services/api';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { ModeToggle } from '../components/mode-toggle';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
@@ -19,7 +25,7 @@ export default function LoginPage() {
     try {
       const data = await authAPI.login(email, password);
       login(data.user, data.token);
-      toast.success('Login successful!');
+      toast.success('Access granted. Synchronizing workspace...');
 
       // Navigate based on role
       if (data.user.role === 'recruiter') {
@@ -28,88 +34,98 @@ export default function LoginPage() {
         navigate('/candidate/dashboard');
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Login failed');
+      toast.error(error.response?.data?.message || 'Authentication failed');
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
-      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />
-      <div className="absolute -top-24 -right-24 h-80 w-80 rounded-full bg-blue-500/20 blur-3xl" />
-      <div className="absolute -bottom-32 -left-24 h-80 w-80 rounded-full bg-emerald-400/20 blur-3xl" />
+    <div className="min-h-screen flex items-center justify-center p-4 bg-zinc-50 dark:bg-zinc-950 font-sans selection:bg-zinc-200 dark:selection:bg-zinc-800 transition-colors duration-500">
+      {/* Background Micro-details */}
+      <div className="fixed inset-0 overflow-hidden pointer-events-none opacity-50 dark:opacity-20">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full bg-zinc-200 dark:bg-zinc-800 blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full bg-zinc-200 dark:bg-zinc-800 blur-[120px]" />
+      </div>
 
-      <div className="relative bg-white/95 rounded-3xl shadow-2xl p-8 w-full max-w-md border border-white/60 backdrop-blur">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center p-3 bg-slate-900 rounded-2xl mb-4">
-            <svg
-              className="w-12 h-12 text-white"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
+      <div className="w-full max-w-[420px] relative z-10 space-y-8 animate-in fade-up duration-700">
+        <div className="flex flex-col items-center">
+          <div className="w-14 h-14 bg-zinc-950 dark:bg-zinc-50 text-zinc-50 dark:text-zinc-950 flex items-center justify-center rounded-2xl mb-8 shadow-xl border border-zinc-800 dark:border-zinc-200 ring-4 ring-zinc-100 dark:ring-zinc-900 transition-transform hover:scale-110 duration-500">
+            <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
           </div>
-          <h1 className="text-3xl font-bold text-slate-900 mb-2">Welcome back</h1>
-          <p className="text-slate-600">Sign in to continue building your candidate pipeline.</p>
+          <h1 className="text-4xl font-heading font-bold text-zinc-900 dark:text-zinc-50 tracking-tight mb-2 text-center">
+            Novus <span className="text-zinc-400 font-medium">Protocol</span>
+          </h1>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Sign in to initialize your secure evaluation session.</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Email Address</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-all"
-              required
-              placeholder="you@example.com"
-            />
-          </div>
+        <Card className="border-zinc-200 dark:border-zinc-800 shadow-2xl bg-white dark:bg-zinc-900/50 backdrop-blur-xl rounded-3xl overflow-hidden">
+          <CardHeader className="pb-4 pt-10 px-10">
+            <CardTitle className="text-xl font-bold tracking-tight">Identity Authentication</CardTitle>
+            <CardDescription className="text-xs font-bold uppercase tracking-widest text-zinc-400">Secure Gateway Access</CardDescription>
+          </CardHeader>
+          <CardContent className="p-10 pt-4">
+            <form onSubmit={handleSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Workspace Email</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="h-12 bg-zinc-50/50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800 rounded-xl focus:ring-1 focus:ring-zinc-950 dark:focus:ring-zinc-100 transition-all"
+                  required
+                  placeholder="name@company.com"
+                />
+              </div>
 
-          <div>
-            <label className="block text-sm font-medium text-slate-700 mb-2">Password</label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              className="w-full px-4 py-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-slate-900/20 focus:border-slate-900 transition-all"
-              required
-              placeholder="••••••••"
-              minLength={6}
-            />
-          </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password" className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Security Phrase</Label>
+                </div>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="h-12 bg-zinc-50/50 dark:bg-zinc-950/50 border-zinc-200 dark:border-zinc-800 rounded-xl focus:ring-1 focus:ring-zinc-950 dark:focus:ring-zinc-100 transition-all"
+                  required
+                  placeholder="••••••••"
+                  minLength={6}
+                />
+              </div>
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-slate-900 text-white py-3 px-4 rounded-xl hover:bg-slate-800 transition-colors disabled:bg-slate-400 disabled:cursor-not-allowed font-medium flex items-center justify-center gap-2"
-          >
-            {loading ? (
-              <>
-                <Spinner size="sm" />
-                Signing in...
-              </>
-            ) : (
-              'Sign In'
-            )}
-          </button>
-        </form>
+              <Button
+                type="submit"
+                disabled={loading}
+                className="w-full h-14 bg-zinc-950 dark:bg-white text-zinc-50 dark:text-zinc-950 font-bold rounded-2xl transition-all shadow-xl hover:shadow-zinc-950/20 dark:hover:shadow-white/10 active:scale-[0.98] mt-4"
+              >
+                {loading ? (
+                  <>
+                    <Spinner size="sm" className="mr-3" />
+                    <span className="text-sm">Authenticating...</span>
+                  </>
+                ) : (
+                  <span className="text-sm uppercase tracking-widest">Authorize Access</span>
+                )}
+              </Button>
+            </form>
+          </CardContent>
+          <CardFooter className="pb-10 pt-0 flex flex-col space-y-4 items-center">
+            <Separator className="w-1/2 opacity-20 mb-4" />
+            <p className="text-xs text-zinc-500 font-medium">
+              Don't have an archive?{' '}
+              <Link to="/register" className="text-zinc-950 dark:text-zinc-100 font-bold underline underline-offset-4 decoration-zinc-300 dark:decoration-zinc-700 hover:decoration-zinc-950 dark:hover:decoration-zinc-100 transition-colors">
+                Apply for Entry
+              </Link>
+            </p>
+          </CardFooter>
+        </Card>
 
-        <div className="mt-6 text-center">
-          <p className="text-slate-600">
-            Don't have an account?{' '}
-            <Link to="/register" className="text-slate-900 hover:text-slate-700 font-medium">
-              Sign up
-            </Link>
-          </p>
+        <div className="flex justify-center pt-4">
+          <ModeToggle />
         </div>
       </div>
     </div>

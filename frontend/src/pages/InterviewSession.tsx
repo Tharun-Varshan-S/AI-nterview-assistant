@@ -7,14 +7,12 @@ import CountdownTimer from '../components/CountdownTimer';
 import DifficultyBadge from '../components/DifficultyBadge';
 import CodingQuestionComponent from '../components/CodingQuestionComponent';
 import { interviewStateStorage } from '../utils/interviewStateStorage';
-import { Send, CheckCircle, AlertCircle } from 'lucide-react';
-import {
-  AnimatedCard,
-  AnimatedProgressBar,
-  GlowBadge,
-  MicroButton,
-  PulseIndicator,
-} from '../components/motion';
+import { Send, CheckCircle, AlertCircle, Terminal, Zap, Target } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const QUESTION_TIME_LIMIT = 180;
 
@@ -248,172 +246,226 @@ export default function InterviewSession() {
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-5">
+    <div className="mx-auto max-w-4xl space-y-8 pb-12 animate-in fade-in duration-500">
       {wasRefreshed && (
-        <AnimatedCard className="flex items-start gap-3 border border-cyan-200 bg-cyan-50/80 p-4">
-          <AlertCircle className="mt-0.5 flex-shrink-0 text-cyan-700" size={20} />
-          <div>
-            <h3 className="font-semibold text-cyan-900">Interview Restored</h3>
-            <p className="text-sm text-cyan-800">We restored your interview to your last submitted answer.</p>
-          </div>
-        </AnimatedCard>
+        <Alert className="border-zinc-200 dark:border-zinc-800 shadow-sm backdrop-blur-sm bg-white/50 dark:bg-zinc-950/50">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle className="font-heading font-semibold text-zinc-900 dark:text-zinc-100">Session Restored</AlertTitle>
+          <AlertDescription className="text-zinc-600 dark:text-zinc-400">
+            We restored your interview to your last submitted answer.
+          </AlertDescription>
+        </Alert>
       )}
 
-      <AnimatedCard className="p-4 sm:p-5">
-        <div className="mb-2 flex items-center justify-between gap-3">
-          <span className="text-sm font-medium text-zinc-700">
-            Question {currentQuestionIndex + 1} of {interview.questions.length}
-          </span>
-          <span className="text-sm text-zinc-600">{progress.toFixed(0)}% complete</span>
-        </div>
-        <AnimatedProgressBar value={progress} max={100} showGlowTrail className="h-3" />
-      </AnimatedCard>
+      <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
+        <CardContent className="p-6">
+          <div className="mb-4 flex items-end justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground mb-1">Current Progress</p>
+              <h3 className="font-heading font-bold text-2xl text-zinc-900 dark:text-zinc-100 leading-none">
+                Question {currentQuestionIndex + 1} <span className="text-zinc-400 dark:text-zinc-600 text-lg font-medium ml-1">/ {interview.questions.length}</span>
+              </h3>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1 bg-zinc-100 dark:bg-zinc-800 rounded-full border border-zinc-200 dark:border-zinc-700">
+              <span className="text-xs font-bold font-mono text-zinc-900 dark:text-zinc-100">{progress.toFixed(0)}%</span>
+            </div>
+          </div>
+          <Progress value={progress} className="h-2" />
+        </CardContent>
+      </Card>
 
-      <AnimatedCard key={currentQuestionIndex} className="animate-fade-up p-6 sm:p-8" glowOnHover>
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-4">
-          <div className="flex flex-wrap items-center gap-2">
+      <div className="space-y-6">
+        <div className="flex flex-wrap items-center justify-between gap-6 px-1">
+          <div className="flex flex-wrap items-center gap-3">
             <DifficultyBadge difficulty={currentQuestion.difficulty} />
-            <span className="text-sm text-zinc-600">Question {currentQuestionIndex + 1}</span>
-            <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs text-zinc-700">
-              Adaptive Level: {interview.currentDifficulty || currentQuestion.difficulty}
-            </span>
-            {difficultyChange === 'increased' && (
-              <GlowBadge label="Difficulty Increased" className="bg-emerald-100/90 text-emerald-700 shadow-none" />
+            <Badge variant="outline" className="h-7 border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/50 flex gap-1.5 items-center">
+              <span className="text-[10px] uppercase font-bold text-muted-foreground tracking-tight">Level:</span>
+              <span className="font-bold text-zinc-900 dark:text-zinc-100">{interview.currentDifficulty || currentQuestion.difficulty}</span>
+            </Badge>
+
+            {difficultyChange && (
+              <Badge variant="secondary" className="h-7 flex gap-1.5 items-center animate-in zoom-in duration-300">
+                <Zap className="h-3 w-3" />
+                <span className="font-bold">Difficulty {difficultyChange}</span>
+              </Badge>
             )}
-            {difficultyChange === 'decreased' && (
-              <GlowBadge label="Difficulty Decreased" className="bg-amber-100/90 text-amber-700 shadow-none" />
+
+            {targetingWeakSkill && (
+              <Badge variant="secondary" className="h-7 flex gap-1.5 items-center border-amber-200/50 bg-amber-50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400">
+                <Target className="h-3 w-3" />
+                <span className="font-bold">Adaptive Focus</span>
+              </Badge>
             )}
-            {targetingWeakSkill && <GlowBadge label="Targeting weak skill" className="bg-rose-100/90 text-rose-700 shadow-none" />}
           </div>
 
           <CountdownTimer key={timeKey} seconds={questionTimeLimit} onTimeout={handleTimeout} />
         </div>
 
-        <div className="mb-6">
-          <h2 className="text-2xl font-semibold leading-relaxed text-zinc-900">{currentQuestion.question}</h2>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {currentQuestion.topic && <span className="rounded-full bg-indigo-100 px-2 py-1 text-xs font-medium text-indigo-700">Topic: {currentQuestion.topic}</span>}
-            {currentQuestion.domain && <span className="rounded-full bg-cyan-100 px-2 py-1 text-xs font-medium text-cyan-700">Domain: {currentQuestion.domain}</span>}
-            <PulseIndicator label="Adaptive Live" />
-          </div>
-          {sessionMetrics && (
-            <p className="mt-3 text-xs text-zinc-500">
-              Session score trend: {sessionMetrics.averageScore.toFixed(1)}/10 after {sessionMetrics.answeredCount} answered
-            </p>
-          )}
-        </div>
+        <Card className="border-zinc-200 dark:border-zinc-800 shadow-xl overflow-hidden backdrop-blur-sm bg-white/80 dark:bg-zinc-950/80">
+          <CardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/20 px-8 py-10">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="rounded-sm border-zinc-300 dark:border-zinc-700 text-[10px] font-bold tracking-widest uppercase py-0 px-2 h-5">Question</Badge>
+                {currentQuestion.topic && <span className="text-xs font-medium text-muted-foreground/80">@{currentQuestion.topic}</span>}
+              </div>
+              <CardTitle className="font-heading text-3xl font-bold leading-[1.15] text-zinc-900 dark:text-zinc-50 max-w-3xl tracking-tight">
+                {currentQuestion.question}
+              </CardTitle>
+              <div className="flex flex-wrap items-center gap-3 pt-2">
+                {currentQuestion.domain && (
+                  <span className="flex items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 px-3 py-1 rounded-full bg-zinc-100/80 dark:bg-zinc-800/80 border border-zinc-200 dark:border-zinc-700/50">
+                    <Terminal className="h-3 w-3" />
+                    {currentQuestion.domain}
+                  </span>
+                )}
+                {sessionMetrics && (
+                  <span className="text-xs font-bold text-muted-foreground flex items-center gap-2 border-l border-zinc-200 dark:border-zinc-800 pl-4 ml-1">
+                    AVG. SCORE
+                    <span className="text-zinc-900 dark:text-zinc-100 font-mono text-sm leading-none bg-zinc-100 dark:bg-zinc-800 px-1.5 py-0.5 rounded">{sessionMetrics.averageScore.toFixed(1)}</span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </CardHeader>
 
-        <div className="mb-6">
-          {isCoding ? (
-            <CodingQuestionComponent
-              question={currentQuestion.question}
-              questionIndex={currentQuestionIndex}
-              questionData={{
-                inputFormat: (currentQuestion as any).inputFormat,
-                outputFormat: (currentQuestion as any).outputFormat,
-                constraints: (currentQuestion as any).constraints,
-                examples: (currentQuestion as any).examples,
-                template: (currentQuestion as any).template,
-              }}
-              storageKeyPrefix={`coding_answer_${id}`}
-              isSubmitting={submitting}
-              difficultyShift={difficultyChange}
-              onRun={runCode}
-              onCodeChange={(code: string, language: string) => {
-                setCodingAnswer(code);
-                setCodingLanguage(language);
-              }}
-              onMetricsChange={({ editCount, typingDurationMs }) => {
-                setCodingMetrics({ editCount, typingDurationMs });
-              }}
-              onSubmit={({ code, language }: { code: string; language: string }) =>
-                handleSubmitAnswer(
-                  { response: code, isCodingAnswer: true, language },
-                  false
-                )
-              }
-            />
-          ) : (
-            <>
-              <label className="mb-2 block text-sm font-medium text-zinc-700">Your Answer</label>
-              <textarea
-                ref={textareaRef}
-                value={answer}
-                onChange={(e) => {
-                  if (firstTypingTime === null) {
-                    setFirstTypingTime(Date.now());
+          <CardContent className="p-8">
+            <div className="min-h-[300px]">
+              {isCoding ? (
+                <CodingQuestionComponent
+                  question={currentQuestion.question}
+                  questionIndex={currentQuestionIndex}
+                  questionData={{
+                    inputFormat: (currentQuestion as any).inputFormat,
+                    outputFormat: (currentQuestion as any).outputFormat,
+                    constraints: (currentQuestion as any).constraints,
+                    examples: (currentQuestion as any).examples,
+                    template: (currentQuestion as any).template,
+                  }}
+                  storageKeyPrefix={`coding_answer_${id}`}
+                  isSubmitting={submitting}
+                  difficultyShift={difficultyChange}
+                  onRun={runCode}
+                  onCodeChange={(code: string, language: string) => {
+                    setCodingAnswer(code);
+                    setCodingLanguage(language);
+                  }}
+                  onMetricsChange={({ editCount, typingDurationMs }) => {
+                    setCodingMetrics({ editCount, typingDurationMs });
+                  }}
+                  onSubmit={({ code, language }: { code: string; language: string }) =>
+                    handleSubmitAnswer(
+                      { response: code, isCodingAnswer: true, language },
+                      false
+                    )
                   }
-                  setNonCodingEditCount((prev) => prev + 1);
-                  setAnswer(e.target.value);
-                }}
-                placeholder="Type your answer here..."
-                className="h-48 w-full resize-none rounded-lg border border-zinc-300 px-4 py-3 transition-all duration-300 focus:border-cyan-400 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
-                disabled={submitting}
-              />
-              <p className="mt-2 text-sm text-zinc-500">
-                {answer.length} characters | {nonCodingEditCount} edits
-              </p>
-            </>
-          )}
-        </div>
-
-        {submitting && (
-          <div className="mb-6 flex items-center gap-2 rounded-lg border border-cyan-200 bg-cyan-50 px-4 py-3 text-sm text-cyan-800 animate-fade-up">
-            <Spinner size="sm" />
-            Submitting your answer. This may take a few seconds.
-          </div>
-        )}
-
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-zinc-600">{remainingQuestions} questions remaining</p>
-          {!isCoding && (
-            <MicroButton
-              onClick={() =>
-                handleSubmitAnswer(
-                  { response: answer, isCodingAnswer: false },
-                  false
-                )
-              }
-              disabled={submitting || !answer.trim()}
-              glow
-              className={`text-white ${
-                submitting
-                  ? 'bg-cyan-500'
-                  : currentQuestionIndex + 1 === interview.questions.length
-                    ? 'bg-emerald-600'
-                    : 'bg-zinc-900'
-              }`}
-            >
-              {submitting ? (
-                <>
-                  <Spinner size="sm" />
-                  Submitting...
-                </>
-              ) : currentQuestionIndex + 1 === interview.questions.length ? (
-                <>
-                  <CheckCircle size={18} />
-                  Complete Interview
-                </>
+                />
               ) : (
-                <>
-                  <Send size={18} />
-                  Submit & Next
-                </>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <label className="text-xs font-bold uppercase tracking-widest text-zinc-900 dark:text-zinc-100">Your Response</label>
+                    <span className="text-[10px] font-bold font-mono text-muted-foreground bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded">
+                      {answer.length} characters
+                    </span>
+                  </div>
+                  <textarea
+                    ref={textareaRef}
+                    value={answer}
+                    onChange={(e) => {
+                      if (firstTypingTime === null) {
+                        setFirstTypingTime(Date.now());
+                      }
+                      setNonCodingEditCount((prev) => prev + 1);
+                      setAnswer(e.target.value);
+                    }}
+                    placeholder="Enter your detailed technical response here..."
+                    className="min-h-[320px] w-full resize-none rounded-xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/30 dark:bg-zinc-900/30 px-6 py-5 text-zinc-900 dark:text-zinc-100 text-lg leading-relaxed placeholder:text-zinc-400 dark:placeholder:text-zinc-600 transition-all focus:bg-white dark:focus:bg-zinc-950 focus:border-zinc-900 dark:focus:border-zinc-100 focus:outline-none focus:ring-0 disabled:opacity-60 shadow-inner"
+                    disabled={submitting}
+                  />
+                </div>
               )}
-            </MicroButton>
-          )}
-        </div>
-      </AnimatedCard>
+            </div>
 
-      <AnimatedCard className="border border-cyan-200 bg-cyan-50/70 p-4">
-        <h3 className="mb-2 font-medium text-cyan-900">Interview Tips</h3>
-        <ul className="space-y-1 text-sm text-cyan-800">
-          <li>Be specific and provide examples where possible.</li>
-          <li>Structure your response to make reasoning clear.</li>
-          <li>Progress is saved after each answer submission.</li>
-          <li>If time expires, your answer auto-submits safely.</li>
-        </ul>
-      </AnimatedCard>
+            {submitting && (
+              <div className="mt-8 flex items-center justify-center p-8 gap-4 rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50 border-dashed animate-pulse">
+                <div className="flex gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-900 dark:bg-zinc-100 animate-bounce [animation-delay:-0.3s]"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-900 dark:bg-zinc-100 animate-bounce [animation-delay:-0.15s]"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-zinc-900 dark:bg-zinc-100 animate-bounce"></div>
+                </div>
+                <span className="text-sm font-bold uppercase tracking-widest text-zinc-700 dark:text-zinc-300">Synchronizing Response Analysis...</span>
+              </div>
+            )}
+
+            <div className="mt-12 flex items-center justify-between pt-8 border-t border-zinc-100 dark:border-zinc-800">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Remaining</span>
+                <Badge variant="outline" className="font-mono font-bold">{remainingQuestions}</Badge>
+              </div>
+
+              {!isCoding && (
+                <Button
+                  onClick={() =>
+                    handleSubmitAnswer(
+                      { response: answer, isCodingAnswer: false },
+                      false
+                    )
+                  }
+                  size="lg"
+                  disabled={submitting || !answer.trim()}
+                  className="rounded-full px-8 h-12 font-bold transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-zinc-900/10 dark:shadow-none bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900"
+                >
+                  {submitting ? (
+                    'Processing...'
+                  ) : currentQuestionIndex + 1 === interview.questions.length ? (
+                    <span className="flex items-center gap-2">Complete Interview <CheckCircle className="h-4 w-4" /></span>
+                  ) : (
+                    <span className="flex items-center gap-2">Submit Answer <Send className="h-4 w-4" /></span>
+                  )}
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
+        <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Evaluation Criteria</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-2 font-medium">
+              <li className="flex items-start gap-3">
+                <div className="w-1 h-1 rounded-full bg-zinc-400 dark:bg-zinc-600 mt-1.5 shrink-0" />
+                <span>Technical accuracy and depth of architectural decisions.</span>
+              </li>
+              <li className="flex items-start gap-3">
+                <div className="w-1 h-1 rounded-full bg-zinc-400 dark:bg-zinc-600 mt-1.5 shrink-0" />
+                <span>Clarity of communication and problem-solving efficiency.</span>
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
+
+        <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">System Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400">AI Evaluator Active</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                <span className="text-[10px] font-bold uppercase text-zinc-600 dark:text-zinc-400">Environment Secure</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
+

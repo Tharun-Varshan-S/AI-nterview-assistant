@@ -13,7 +13,15 @@ import {
   XCircle,
   Lightbulb,
   Download,
+  Calendar,
+  Mail,
+  User as UserIcon,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Separator } from '@/components/ui/separator';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 export default function CandidateDetailView() {
   const { id } = useParams<{ id: string }>();
@@ -52,232 +60,259 @@ export default function CandidateDetailView() {
 
   const user = interview.userId as User;
   const getScoreLabel = (score: number) => {
-    if (score >= 8) return 'Excellent';
-    if (score >= 6) return 'Good';
-    if (score >= 4) return 'Fair';
-    return 'Needs Improvement';
+    if (score >= 8) return 'Elite Performance';
+    if (score >= 6) return 'Strong Candidate';
+    if (score >= 4) return 'Baseline Assessment';
+    return 'Action Required';
   };
 
   const finalEvaluation = interview.finalEvaluation;
   const overallScore = finalEvaluation?.overallScore ?? interview.averageScore ?? 0;
 
   return (
-    <div className="max-w-7xl mx-auto space-y-6">
-      {/* Back Button */}
-      <button
-        onClick={() => navigate('/recruiter/dashboard')}
-        className="flex items-center gap-2 text-gray-600 hover:text-gray-900"
-      >
-        <ArrowLeft size={20} />
-        Back to Dashboard
-      </button>
-
-      {/* Candidate Header */}
-      <div className="bg-gradient-to-r from-blue-500 to-indigo-600 rounded-xl shadow-lg p-8 text-white">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <h1 className="text-3xl font-bold mb-2">{user.name}</h1>
-            <p className="text-blue-100 mb-4">{user.email}</p>
-            <div className="flex items-center gap-4 text-sm">
-              <span className="bg-white/20 px-3 py-1 rounded-full">
-                {interview.questions.length} Questions
-              </span>
-              <span className="bg-white/20 px-3 py-1 rounded-full">
-                Completed {new Date(interview.updatedAt).toLocaleDateString()}
-              </span>
-            </div>
-          </div>
-          <div className="text-center bg-white/20 rounded-xl p-6">
-            <Award size={48} className="mx-auto mb-2" />
-            <div className="text-5xl font-bold">{overallScore.toFixed(1)}</div>
-            <p className="text-lg mt-1">{getScoreLabel(overallScore)}</p>
-          </div>
-        </div>
+    <div className="max-w-6xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+      {/* Navigation */}
+      <div className="flex items-center justify-between">
+        <Button
+          variant="ghost"
+          onClick={() => navigate('/recruiter/dashboard')}
+          className="gap-2 -ml-2 text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft size={16} />
+          Back to Pipeline
+        </Button>
+        <Badge variant="outline" className="px-3 py-1 font-medium capitalize border-zinc-200 dark:border-zinc-800">
+          Interview UID: {interview._id.slice(-6).toUpperCase()}
+        </Badge>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Main Content - Interview Details */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Performance Summary */}
-          <div className="bg-white rounded-xl shadow-sm border p-6">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <TrendingUp size={24} />
-              Performance Metrics
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">
-                  {(interview.averageScore ?? 0).toFixed(1)}
-                </div>
-                <p className="text-sm text-gray-600">Overall Score</p>
+      {/* Profile Header */}
+      <section className="relative overflow-hidden rounded-3xl border bg-zinc-950 text-white p-8 md:p-12">
+        <div className="absolute top-0 right-0 w-1/3 h-full bg-gradient-to-l from-zinc-900/50 to-transparent pointer-events-none" />
+
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-8">
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <h1 className="text-4xl md:text-5xl font-heading font-bold tracking-tight">{user.name}</h1>
+              <div className="flex flex-wrap items-center gap-4 text-zinc-400">
+                <span className="flex items-center gap-1.5 text-sm">
+                  <Mail size={14} /> {user.email}
+                </span>
+                <span className="flex items-center gap-1.5 text-sm">
+                  <Calendar size={14} /> {new Date(interview.updatedAt).toLocaleDateString()}
+                </span>
               </div>
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">
-                  {(interview.theoreticalScore ?? 0).toFixed(1)}
-                </div>
-                <p className="text-sm text-gray-600">Theoretical Score</p>
-              </div>
-              <div className="text-center p-4 bg-indigo-50 rounded-lg">
-                <div className="text-2xl font-bold text-indigo-600">
-                  {(interview.codingScore ?? 0).toFixed(1)}
-                </div>
-                <p className="text-sm text-gray-600">Coding Score</p>
-              </div>
-              <div className="text-center p-4 bg-amber-50 rounded-lg">
-                <div className="text-2xl font-bold text-amber-600">
-                  {interview.questions.length}
-                </div>
-                <p className="text-sm text-gray-600">Questions</p>
-              </div>
+            </div>
+            <div className="flex gap-2">
+              <Badge className="bg-zinc-100 text-zinc-950 border-0 hover:bg-zinc-200">
+                {interview.questions.length} EVALUATED SEGMENTS
+              </Badge>
+              <Badge variant="outline" className="text-white border-zinc-700">
+                {user.role.toUpperCase()}
+              </Badge>
             </div>
           </div>
 
-          {/* Final Evaluation */}
-          <div className="bg-white rounded-xl shadow-sm border p-6">
-            <h2 className="text-xl font-semibold mb-4">Final Evaluation</h2>
-            {finalEvaluation && Object.keys(finalEvaluation).length > 0 ? (
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="p-4 rounded-lg bg-emerald-50 border border-emerald-200">
-                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                      <CheckCircle size={16} className="text-emerald-600" />
-                      Strengths
-                    </h4>
-                    {finalEvaluation?.strengths && finalEvaluation.strengths.length > 0 ? (
-                      <ul className="space-y-2">
-                        {finalEvaluation.strengths.map((strength, i) => (
-                          <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
-                            <span className="text-emerald-600 mt-0.5">✓</span>
-                            <span>{strength}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-gray-500 italic">No strengths recorded</p>
-                    )}
-                  </div>
-                  <div className="p-4 rounded-lg bg-rose-50 border border-rose-200">
-                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                      <XCircle size={16} className="text-rose-600" />
-                      Weaknesses
-                    </h4>
-                    {finalEvaluation?.weaknesses && finalEvaluation.weaknesses.length > 0 ? (
-                      <ul className="space-y-2">
-                        {finalEvaluation.weaknesses.map((weakness, i) => (
-                          <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
-                            <span className="text-rose-600 mt-0.5">✗</span>
-                            <span>{weakness}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-gray-500 italic">No weaknesses identified</p>
-                    )}
-                  </div>
-                  <div className="p-4 rounded-lg bg-yellow-50 border border-yellow-200">
-                    <h4 className="text-sm font-semibold mb-2 flex items-center gap-2">
-                      <Lightbulb size={16} className="text-yellow-600" />
-                      Recommendations
-                    </h4>
-                    {finalEvaluation?.recommendations && finalEvaluation.recommendations.length > 0 ? (
-                      <ul className="space-y-2">
-                        {finalEvaluation.recommendations.map((improvement, i) => (
-                          <li key={i} className="text-sm text-gray-700 flex items-start gap-2">
-                            <span className="text-yellow-600 mt-0.5">💡</span>
-                            <span>{improvement}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-sm text-gray-500 italic">No suggestions available</p>
-                    )}
-                  </div>
+          <div className="flex items-center gap-6 bg-zinc-900/80 backdrop-blur-md p-6 rounded-2xl border border-zinc-800">
+            <div className="text-center">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-zinc-500 mb-1">AGGREGATE SCORE</p>
+              <div className="text-5xl font-heading font-bold lining-nums tracking-tighter">
+                {overallScore.toFixed(1)}
+              </div>
+            </div>
+            <Separator orientation="vertical" className="h-12 bg-zinc-800" />
+            <div>
+              <p className="font-semibold text-zinc-100">{getScoreLabel(overallScore)}</p>
+              <p className="text-xs text-zinc-400">System Verified Assessment</p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Analytics & Content */}
+        <div className="lg:col-span-2 space-y-8">
+          {/* Performance Breakdown */}
+          <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm">
+            <CardHeader>
+              <CardTitle className="font-heading text-lg flex items-center gap-2">
+                <TrendingUp size={20} className="text-zinc-500" />
+                Performance Matrix
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-0">
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Theoretical Proficiency</p>
+                <div className="text-2xl font-heading font-bold">{(interview.theoreticalScore ?? 0).toFixed(1)}</div>
+                <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-1000 ease-out"
+                    style={{ width: `${(interview.theoreticalScore ?? 0) * 10}%` }}
+                  />
                 </div>
               </div>
-            ) : (
-              <div className="text-center p-6 bg-yellow-50 border border-yellow-200 rounded-lg">
-                <p className="text-sm text-yellow-800">Evaluation data not available</p>
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Coding Implementation</p>
+                <div className="text-2xl font-heading font-bold">{(interview.codingScore ?? 0).toFixed(1)}</div>
+                <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-1000 ease-out"
+                    style={{ width: `${(interview.codingScore ?? 0) * 10}%` }}
+                  />
+                </div>
               </div>
-            )}
+              <div className="space-y-2">
+                <p className="text-[10px] font-bold uppercase text-muted-foreground tracking-wider">Communication Quality</p>
+                <div className="text-2xl font-heading font-bold">{(interview.averageScore ?? 0).toFixed(1)}</div>
+                <div className="h-1.5 w-full bg-zinc-100 dark:bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-zinc-900 dark:bg-zinc-100 transition-all duration-1000 ease-out"
+                    style={{ width: `${(interview.averageScore ?? 0) * 10}%` }}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* AI Insights */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card className="border-0 bg-emerald-50/50 dark:bg-emerald-950/20 shadow-none">
+              <CardHeader className="pb-3">
+                <CardTitle className="font-heading text-sm font-bold flex items-center gap-2 text-emerald-800 dark:text-emerald-300">
+                  <CheckCircle size={16} /> CORE STRENGTHS
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {(finalEvaluation?.strengths && finalEvaluation.strengths.length > 0) ? (
+                  finalEvaluation.strengths.map((str, i) => (
+                    <div key={i} className="flex gap-2 text-sm text-emerald-900/80 dark:text-emerald-200/80">
+                      <span className="shrink-0 text-emerald-500 mt-1">•</span>
+                      {str}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs italic opacity-50">No distinctive traits identified</p>
+                )}
+              </CardContent>
+            </Card>
+
+            <Card className="border-0 bg-rose-50/50 dark:bg-rose-950/20 shadow-none">
+              <CardHeader className="pb-3">
+                <CardTitle className="font-heading text-sm font-bold flex items-center gap-2 text-rose-800 dark:text-rose-300">
+                  <XCircle size={16} /> GROWTH AREAS
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {(finalEvaluation?.weaknesses && finalEvaluation.weaknesses.length > 0) ? (
+                  finalEvaluation.weaknesses.map((weak, i) => (
+                    <div key={i} className="flex gap-2 text-sm text-rose-900/80 dark:text-rose-200/80">
+                      <span className="shrink-0 text-rose-400 mt-1">•</span>
+                      {weak}
+                    </div>
+                  ))
+                ) : (
+                  <p className="text-xs italic opacity-50">No major roadblocks detected</p>
+                )}
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Interview Q&A */}
-          <div className="bg-white rounded-xl shadow-sm border p-6">
-            <h2 className="text-xl font-semibold mb-4">Interview Q&A</h2>
+          {/* Detailed Q&A Log */}
+          <div className="space-y-6">
+            <h2 className="text-2xl font-heading font-bold tracking-tight">Interview Transcript</h2>
             <div className="space-y-6">
               {interview.answers.map((answer, index) => {
                 const question = interview.questions[answer.questionIndex ?? index];
-
                 return (
-                  <div key={`${answer.questionIndex ?? index}-${index}`} className="border rounded-lg p-6">
-                    <div className="flex items-start justify-between mb-4">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <span className="text-sm font-medium text-gray-600">
-                            Question {index + 1}
-                          </span>
-                          {question && <DifficultyBadge difficulty={question.difficulty} />}
+                  <Card key={index} className="border-zinc-200 dark:border-zinc-800 overflow-hidden shadow-none group">
+                    <div className="p-6 space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary" className="rounded font-mono text-[10px]">Q{index + 1}</Badge>
+                            {question && <DifficultyBadge difficulty={question.difficulty} />}
+                          </div>
+                          <h3 className="text-lg font-bold leading-snug text-foreground/90">{answer.question}</h3>
                         </div>
-                        <h3 className="text-lg font-medium text-gray-900">{answer.question}</h3>
+                      </div>
+
+                      <div className="relative">
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-zinc-100 dark:bg-zinc-800 rounded-full" />
+                        <div className="pl-6 py-2">
+                          <p className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2">Response Analytics</p>
+                          <div className="text-foreground/80 leading-relaxed whitespace-pre-wrap text-sm italic border-l-0">
+                            "{answer.response}"
+                          </div>
+                        </div>
                       </div>
                     </div>
-                    <div>
-                      <h4 className="text-sm font-medium text-gray-700 mb-2">
-                        Candidate's Answer:
-                      </h4>
-                      <div className="bg-gray-50 rounded-lg p-4 text-gray-800 whitespace-pre-wrap">
-                        {answer.response}
-                      </div>
-                    </div>
-                  </div>
+                  </Card>
                 );
               })}
             </div>
           </div>
         </div>
 
-        {/* Sidebar - Resume */}
-        <div className="lg:col-span-1">
-          <div className="bg-white rounded-xl shadow-sm border p-6 sticky top-6">
-            <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
-              <FileText size={24} />
-              Resume
-            </h2>
-
-            {resume ? (
-              <div>
-                <div className="bg-gray-50 rounded-lg p-4 mb-4">
-                  <p className="text-sm font-medium text-gray-900 mb-1">{resume.fileName}</p>
-                  <p className="text-xs text-gray-600">
-                    Uploaded {new Date(resume.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-
-                <a
-                  href={`http://localhost:5000/${resume.filePath}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center justify-center gap-2 w-full bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                >
-                  <Download size={18} />
-                  Download Resume
-                </a>
-
-                {resume.extractedText && (
-                  <div className="mt-4">
-                    <h3 className="text-sm font-medium text-gray-700 mb-2">Extracted Text</h3>
-                    <div className="bg-gray-50 rounded-lg p-3 max-h-96 overflow-y-auto text-xs text-gray-700">
-                      {resume.extractedText}
-                    </div>
+        {/* Sidebar Assets */}
+        <div className="space-y-8">
+          {/* Resume & Documents */}
+          <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm sticky top-24">
+            <CardHeader>
+              <CardTitle className="font-heading text-lg flex items-center gap-2">
+                <FileText size={20} className="text-zinc-500" />
+                Asset Intel
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {resume ? (
+                <>
+                  <div className="p-4 rounded-xl border bg-zinc-50 dark:bg-zinc-900 border-zinc-100 dark:border-zinc-800">
+                    <p className="text-sm font-bold truncate mb-1">{resume.fileName}</p>
+                    <p className="text-[10px] text-muted-foreground uppercase flex items-center gap-1.5 tracking-wider">
+                      <Calendar size={10} />
+                      PROCESSED {new Date(resume.createdAt).toLocaleDateString()}
+                    </p>
                   </div>
-                )}
+
+                  <Button
+                    className="w-full h-12 gap-2 bg-zinc-950 hover:bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-950 dark:hover:bg-zinc-200 text-white border-0"
+                    onClick={() => window.open(`http://localhost:5000/${resume.filePath}`, '_blank')}
+                  >
+                    <Download size={16} />
+                    View & Retrieve PDF
+                  </Button>
+
+                  {resume.extractedText && (
+                    <div className="space-y-3">
+                      <p className="text-xs font-bold uppercase text-muted-foreground tracking-widest">Extracted Content Scan</p>
+                      <ScrollArea className="h-64 w-full rounded-md border p-4 bg-zinc-50 dark:bg-zinc-950/50">
+                        <div className="text-[11px] font-mono leading-relaxed text-zinc-600 dark:text-zinc-400">
+                          {resume.extractedText}
+                        </div>
+                      </ScrollArea>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <div className="text-center py-8 px-4 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800">
+                  <p className="text-sm text-muted-foreground italic">No document telemetry found</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Recruiter Meta */}
+          <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm">
+            <CardContent className="p-6">
+              <div className="flex items-center gap-3 text-sm font-medium">
+                <div className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                Interview Evaluation Mode Active
               </div>
-            ) : (
-              <p className="text-gray-500 text-sm">No resume uploaded</p>
-            )}
-          </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
   );
 }
+

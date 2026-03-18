@@ -1,47 +1,21 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { resumeAPI, interviewAPI, analyticsAPI, Interview, OverviewAnalytics, Resume } from '../services/api';
-import { Upload, FileText, Trash2, Play, AlertCircle, Link2, ArrowUpRight } from 'lucide-react';
+import { Upload, FileText, Trash2, Play, AlertCircle, Link2, ArrowUpRight, CheckCircle2, History, Zap, Target, Star, BrainCircuit } from 'lucide-react';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
-import Skeleton from '../components/Skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { validateFile, formatFileSize } from '../utils/fileValidation';
-import {
-  AnimatedCard,
-  AnimatedProgressBar,
-  AnimatedTooltip,
-  CountUpNumber,
-  GlowBadge,
-  MicroButton,
-  PulseIndicator,
-  StaggerContainer,
-} from '../components/motion';
+import { Progress } from '@/components/ui/progress';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Separator } from '@/components/ui/separator';
+import CountUpNumber from '../components/motion/CountUpNumber';
+import { cn } from '@/lib/utils';
 
 const SkillAnalyticsDashboard = lazy(() => import('../components/SkillAnalyticsDashboard'));
-
-function InterviewSparkline({ value }: { value: number }) {
-  const width = 90;
-  const height = 28;
-  const peak = 10;
-  const normalized = Math.max(0.6, Math.min(9.5, value));
-  const points = [
-    [0, 22],
-    [16, 20],
-    [32, 16],
-    [48, 18],
-    [64, Math.max(5, 24 - normalized * (20 / peak))],
-    [80, 10],
-  ];
-
-  const path = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p[0]} ${p[1]}`).join(' ');
-
-  return (
-    <svg width={width} height={height} viewBox="0 0 90 28" className="overflow-visible">
-      <path d={path} fill="none" stroke="#3BA2FF" strokeWidth="2" strokeDasharray="220" className="animate-line-draw" />
-      <circle cx="80" cy="10" r="2" fill="#39D4AA" className="animate-soft-pulse" />
-    </svg>
-  );
-}
 
 export default function CandidateDashboard() {
   const [resume, setResume] = useState<Resume | null>(null);
@@ -58,7 +32,7 @@ export default function CandidateDashboard() {
   }, []);
 
   const completedInterviews = useMemo(
-    () => interviews.filter((interview) => interview.status === 'completed'),
+    () => interviews.filter((interview) => interview.status === 'completed').sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [interviews]
   );
 
@@ -125,15 +99,6 @@ export default function CandidateDashboard() {
     }
   };
 
-  const handleRetryUpload = () => {
-    setUploadError(null);
-    setRetryCount(0);
-    const input = document.getElementById('resume-file-input') as HTMLInputElement;
-    if (input) {
-      input.click();
-    }
-  };
-
   const startNewInterview = async () => {
     if (!resume) {
       toast.error('Add your resume first so we can tailor the questions.');
@@ -153,30 +118,19 @@ export default function CandidateDashboard() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-6xl space-y-6">
-        <div className="space-y-2">
-          <Skeleton className="h-8 w-56" />
-          <Skeleton className="h-4 w-72" />
+      <div className="mx-auto max-w-5xl space-y-8 animate-pulse pt-8">
+        <header className="space-y-4">
+          <div className="h-10 w-64 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
+          <div className="h-4 w-96 bg-zinc-100 dark:bg-zinc-900 rounded-lg" />
+        </header>
+        <div className="grid gap-6 md:grid-cols-4">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="h-24 rounded-2xl bg-zinc-100 dark:bg-zinc-900" />
+          ))}
         </div>
-        <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr]">
-          <div className="space-y-6">
-            <div className="convio-glass p-6">
-              <Skeleton className="h-6 w-40" />
-              <Skeleton className="mt-4 h-24 w-full" />
-              <Skeleton className="mt-4 h-10 w-40" />
-            </div>
-            <div className="convio-glass p-6">
-              <Skeleton className="h-6 w-40" />
-              <div className="mt-4 space-y-3">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-              </div>
-            </div>
-          </div>
-          <div className="convio-glass p-6">
-            <Skeleton className="h-6 w-40" />
-            <Skeleton className="mt-4 h-40 w-full" />
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+          <div className="lg:col-span-3 h-64 rounded-3xl bg-zinc-100 dark:bg-zinc-900" />
+          <div className="lg:col-span-2 h-64 rounded-3xl bg-zinc-100 dark:bg-zinc-900" />
         </div>
       </div>
     );
@@ -184,45 +138,68 @@ export default function CandidateDashboard() {
 
   const topSkills = resume?.structuredData?.skills?.slice(0, 8) || [];
   const actionCards = [
-    { title: 'Practice', subtitle: 'Warm up with targeted drills', path: '/candidate/practice' },
-    { title: 'Mock Setup', subtitle: 'Configure coding or theory rounds', path: '/candidate/mock/setup' },
-    { title: 'Analytics', subtitle: 'Review growth and weak areas', path: '/candidate/analytics' },
-    { title: 'Latest Results', subtitle: 'Open your most recent report', path: completedInterviews[0]?._id ? `/candidate/results/${completedInterviews[0]._id}` : '/candidate/dashboard' }
+    { title: 'Practice Rounds', subtitle: 'Targeted skill drills', path: '/candidate/practice', icon: BrainCircuit },
+    { title: 'Mock Setup', subtitle: 'Configure new sessions', path: '/candidate/mock/setup', icon: Zap },
+    { title: 'Skill Analytics', subtitle: 'Growth & trajectory', path: '/candidate/analytics', icon: Target },
+    { title: 'Latest Report', subtitle: 'Deep-dive feedback', path: completedInterviews[0]?._id ? `/candidate/results/${completedInterviews[0]._id}` : '/candidate/dashboard', icon: FileText }
   ];
 
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
-      <section>
-        <h1 className="text-3xl font-bold text-zinc-900">Candidate Command Center</h1>
-        <p className="mt-1 text-zinc-600">
-          Track readiness, AI confidence, and interview outcomes from one adaptive workspace.
-        </p>
-      </section>
+    <div className="mx-auto max-w-5xl space-y-10 font-sans pb-12 animate-in fade-in duration-700">
+      <header className="mt-8 mb-4">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+          <div className="space-y-1.5 text-left">
+            <h1 className="text-4xl md:text-5xl font-heading font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">Candidate Dashboard</h1>
+            <p className="text-zinc-500 dark:text-zinc-400 font-medium">Manage your workspace and track interview readiness.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <Badge variant="outline" className="h-8 border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 font-bold tracking-widest text-[10px] px-3">
+              ACTIVE SESSION
+            </Badge>
+          </div>
+        </div>
+      </header>
 
       {overview && (
-        <AnimatedCard className="rounded-2xl border border-indigo-200 bg-gradient-to-r from-indigo-600 to-blue-600 p-6 text-white shadow-md" glowOnHover>
-          <div className="grid gap-4 md:grid-cols-4">
-            <div>
-              <p className="text-sm text-indigo-100">Readiness Score</p>
-              <p className="text-5xl font-semibold">{overview.readinessScore}</p>
+        <Card className="border-zinc-200 dark:border-zinc-800 shadow-xl overflow-hidden bg-white/50 dark:bg-zinc-950/20 backdrop-blur-sm">
+          <CardHeader className="border-b border-zinc-100 dark:border-zinc-900 pb-4">
+            <div className="flex items-center gap-2">
+              <Star className="text-amber-500 w-4 h-4 fill-amber-500" />
+              <CardTitle className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Readiness Protocol</CardTitle>
             </div>
-            <div>
-              <p className="text-sm text-indigo-100">Status</p>
-              <span className="mt-2 inline-flex rounded-full bg-white/20 px-3 py-1 text-sm font-semibold">{overview.readinessLevel || 'Improving'}</span>
+          </CardHeader>
+          <CardContent className="p-8">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase text-zinc-500 tracking-wider">Overall Score</p>
+                <div className="text-4xl font-heading font-bold text-zinc-900 dark:text-zinc-50 lining-nums">
+                  <CountUpNumber value={overview.readinessScore} decimals={1} />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase text-zinc-500 tracking-wider">Tier Status</p>
+                <Badge variant="secondary" className="mt-1 bg-zinc-900 dark:bg-white text-white dark:text-zinc-950 font-bold px-3">
+                  {overview.readinessLevel?.toUpperCase() || 'EVALUATING'}
+                </Badge>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase text-zinc-500 tracking-wider">Top Competency</p>
+                <p className="text-sm font-bold text-zinc-800 dark:text-zinc-200 truncate">{overview.strongestSkill || '—'}</p>
+              </div>
+              <div className="space-y-1">
+                <p className="text-[10px] font-bold uppercase text-zinc-500 tracking-wider">Target Focus</p>
+                <p className="text-sm font-bold text-zinc-800 dark:text-zinc-200 truncate">{overview.weakestSkill || '—'}</p>
+              </div>
             </div>
-            <div>
-              <p className="text-sm text-indigo-100">Strongest Skill</p>
-              <p className="mt-2 text-lg font-semibold">{overview.strongestSkill}</p>
+            <div className="mt-10 space-y-2">
+              <div className="flex justify-between text-[10px] font-bold text-zinc-500 uppercase">
+                <span>System Alignment Progress</span>
+                <span className="text-zinc-900 dark:text-zinc-100">{overview.readinessPercentage || 0}%</span>
+              </div>
+              <Progress value={overview.readinessPercentage || 0} className="h-1.5" />
             </div>
-            <div>
-              <p className="text-sm text-indigo-100">Weakest Skill</p>
-              <p className="mt-2 text-lg font-semibold">{overview.weakestSkill}</p>
-            </div>
-          </div>
-          <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/20">
-            <div className="h-full animate-pulse bg-white/90" style={{ width: `${overview.readinessPercentage || 0}%` }} />
-          </div>
-        </AnimatedCard>
+          </CardContent>
+        </Card>
       )}
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -230,259 +207,206 @@ export default function CandidateDashboard() {
           <button
             key={card.title}
             onClick={() => navigate(card.path)}
-            className="group rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-md transition hover:-translate-y-0.5 hover:border-indigo-300"
+            className="group relative flex flex-col justify-between rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 p-6 text-left shadow-sm transition-all hover:border-zinc-900 dark:hover:border-zinc-100 hover:shadow-xl hover:-translate-y-1"
           >
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-semibold text-slate-900">{card.title}</h3>
-              <ArrowUpRight size={18} className="text-slate-400 transition group-hover:text-indigo-600" />
+            <div className="flex w-full items-start justify-between">
+              <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-900 border border-zinc-100 dark:border-zinc-800 group-hover:bg-zinc-900 dark:group-hover:bg-white group-hover:text-zinc-50 dark:group-hover:text-zinc-950 transition-colors">
+                <card.icon size={20} />
+              </div>
+              <ArrowUpRight size={18} className="text-zinc-300 dark:text-zinc-700 transition-colors group-hover:text-zinc-950 dark:group-hover:text-white" />
             </div>
-            <p className="mt-2 text-sm text-slate-600">{card.subtitle}</p>
+            <div className="mt-6">
+              <h3 className="font-heading font-bold text-zinc-900 dark:text-zinc-50">{card.title}</h3>
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400 font-medium">{card.subtitle}</p>
+            </div>
           </button>
         ))}
       </div>
 
-      {topSkills.length > 0 && (
-        <AnimatedCard className="p-6">
-          <h2 className="mb-4 text-xl font-semibold text-zinc-900">Skill Grid</h2>
-          <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-4">
-            {topSkills.map((skill, idx) => (
-              <div key={skill} className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm">
-                <span className="font-medium text-slate-800">{skill}</span>
-                <span className={idx < 2 ? 'text-emerald-600' : 'text-amber-600'}>{idx < 2 ? '↑' : '→'}</span>
-              </div>
-            ))}
-          </div>
-        </AnimatedCard>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
-        <AnimatedCard className="p-6" glowOnHover>
-          <div className="mb-5 flex items-center justify-between gap-3">
-            <h2 className="flex items-center gap-2 text-xl font-semibold text-zinc-900">
-              <FileText size={22} className="text-teal-600" />
-              Resume Intelligence
-            </h2>
+      <div className="grid gap-8 lg:grid-cols-5 items-stretch">
+        <Card className="lg:col-span-3 flex flex-col rounded-3xl border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-lg overflow-hidden">
+          <div className="border-b border-zinc-100 dark:border-zinc-900 px-8 py-6 flex items-center justify-between bg-zinc-50/50 dark:bg-zinc-900/10">
+            <div className="flex items-center gap-3">
+              <FileText size={18} className="text-zinc-400" />
+              <h2 className="font-heading font-bold text-lg text-zinc-900 dark:text-zinc-100 tracking-tight">Active Resume Scan</h2>
+            </div>
             {resume && (
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => {
-                  const confirmed = window.confirm('Remove this resume? You can upload a new one anytime.');
-                  if (!confirmed) {
-                    return;
+                  if (window.confirm('Remove this resume context from the platform?')) {
+                    setResume(null);
+                    toast.info('Resume context removed.');
                   }
-                  setResume(null);
-                  toast.info('Resume removed. Upload an updated version when ready.');
                 }}
-                className="inline-flex items-center gap-1 text-sm text-rose-600 transition-colors hover:text-rose-700"
+                className="text-[10px] font-bold uppercase tracking-widest text-zinc-400 hover:text-rose-500"
               >
-                <Trash2 size={15} />
-                Remove
-              </button>
+                Clear Context
+              </Button>
             )}
           </div>
 
-          {resume ? (
-            <div className="space-y-4">
-              <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/80 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="font-semibold text-zinc-900">{resume.fileName}</h3>
-                    <p className="mt-1 text-sm text-zinc-600">Uploaded on {new Date(resume.createdAt).toLocaleDateString()}</p>
+          <div className="flex-1 p-8">
+            {resume ? (
+              <div className="space-y-8 animate-in slide-in-from-bottom-2 duration-500">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+                  <div className="space-y-1">
+                    <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-50 truncate max-w-sm">{resume.fileName}</h3>
+                    <p className="text-sm font-medium text-zinc-400">Contextualization Complete</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {resume.aiValidated && (
-                      <>
-                        <PulseIndicator label="AI Verified" />
-                        <GlowBadge label="validated" />
-                      </>
-                    )}
-                  </div>
-                </div>
-                {resume.aiValidated && (
-                  <p className="mt-3 text-sm text-zinc-700">
-                    Confidence: <CountUpNumber value={Math.round(resume.aiConfidence * 100)} suffix="%" className="font-semibold text-zinc-900" />
-                  </p>
-                )}
-              </div>
-
-              {resume.structuredData && (
-                <div className="rounded-xl border border-cyan-200/70 bg-cyan-50/60 p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-cyan-700">Primary Domain</p>
-                      <p className="convio-link-line mt-1 inline-flex text-sm font-semibold text-cyan-950">
-                        {resume.structuredData.primaryDomain || 'General'}
-                      </p>
-                    </div>
-                    {resume.structuredData.experienceYears > 0 && (
-                      <div className="text-right">
-                        <p className="text-xs text-cyan-700">Experience</p>
-                        <p className="text-sm font-semibold text-cyan-950">{resume.structuredData.experienceYears} years</p>
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="my-3 flex items-center gap-2 text-cyan-600">
-                    <Link2 size={14} />
-                    <div className="h-px flex-1 bg-gradient-to-r from-cyan-400 via-teal-500 to-cyan-400" />
-                    <span className="text-[10px] uppercase tracking-[0.2em]">Domain to Skills</span>
-                  </div>
-
-                  <StaggerContainer className="flex flex-wrap gap-2" delayStepMs={70}>
-                    {topSkills.map((skill) => (
-                      <span key={skill} className="rounded-full border border-white bg-white px-3 py-1 text-xs font-medium text-cyan-800">
-                        {skill}
-                      </span>
-                    ))}
-                  </StaggerContainer>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="rounded-xl border border-dashed border-zinc-300 p-8 text-center">
-              {uploadError && (
-                <div className="mb-4 flex items-start gap-3 rounded-lg border border-rose-200 bg-rose-50 p-3 text-left">
-                  <AlertCircle className="mt-0.5 flex-shrink-0 text-rose-600" size={18} />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium text-rose-900">{uploadError}</p>
-                    <button
-                      onClick={handleRetryUpload}
-                      className="mt-2 text-sm font-medium text-rose-700 underline hover:text-rose-800"
-                    >
-                      Try again
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              <Upload className="mx-auto mb-4 text-zinc-400" size={44} />
-              <h3 className="text-lg font-medium text-zinc-900">Upload a resume to personalize interviews</h3>
-              <p className="mb-4 mt-2 text-zinc-600">PDF only, max 5MB.</p>
-              <label className="cursor-pointer">
-                <input
-                  id="resume-file-input"
-                  type="file"
-                  accept=".pdf"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  disabled={uploading}
-                />
-                <span className="inline-flex rounded-xl bg-zinc-900 px-6 py-2 text-white transition-colors hover:bg-zinc-800">
-                  {uploading ? (
-                    <span className="flex items-center gap-2">
-                      <Spinner size="sm" />
-                      {retryCount > 0 ? `Retrying (${retryCount})...` : 'Uploading...'}
-                    </span>
-                  ) : (
-                    'Choose File'
+                  {resume.aiValidated && (
+                    <Badge variant="outline" className="h-8 bg-emerald-50 dark:bg-emerald-950/20 border-emerald-200 dark:border-emerald-800 text-emerald-700 dark:text-emerald-400 font-bold gap-2">
+                      <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                      AI VERIFIED ARCHIVE
+                    </Badge>
                   )}
-                </span>
-              </label>
-            </div>
-          )}
-        </AnimatedCard>
+                </div>
 
-        <AnimatedCard className="convio-mesh-bg relative overflow-hidden p-6 text-white" glowOnHover>
-          <div className="pointer-events-none absolute inset-0 rounded-[inherit] border border-white/25" />
-          <div className="pointer-events-none absolute inset-[1px] rounded-[inherit] border border-transparent bg-[linear-gradient(120deg,rgba(255,255,255,0.25),transparent_45%,rgba(255,255,255,0.25))] opacity-70" />
-          <div className="relative z-10">
-            <p className="text-xs uppercase tracking-[0.2em] text-teal-100">Interview Session</p>
-            <h2 className="mt-2 text-2xl font-semibold">Ready for the next round?</h2>
-            <p className="mt-2 max-w-sm text-sm text-zinc-100/90">
-              Launch a timed session with adaptive difficulty and AI evaluation. Progress is auto-saved.
-            </p>
-            <MicroButton
-              onClick={startNewInterview}
-              disabled={!resume}
-              glow
-              className="mt-6 bg-white text-zinc-900 disabled:bg-zinc-300 disabled:text-zinc-500"
-            >
-              <Play size={18} />
-              Start New Interview
-            </MicroButton>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800/60">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-3">Target Domain</span>
+                    <p className="text-base font-bold text-zinc-800 dark:text-zinc-100">{resume.structuredData?.primaryDomain || 'Technical Lead'}</p>
+                  </div>
+                  <div className="p-5 rounded-2xl bg-zinc-50 dark:bg-zinc-900/50 border border-zinc-100 dark:border-zinc-800/60">
+                    <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-3">Industry Record</span>
+                    <p className="text-base font-bold text-zinc-800 dark:text-zinc-100">{resume.structuredData?.experienceYears || '0'} Years Experience</p>
+                  </div>
+                </div>
+
+                <div>
+                  <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest block mb-4">Core Competency Graph</span>
+                  <div className="flex flex-wrap gap-2">
+                    {topSkills.map((skill) => (
+                      <Badge key={skill} variant="secondary" className="px-3 h-7 font-bold text-[10px] uppercase border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 transition-colors hover:border-zinc-900 dark:hover:border-zinc-100">
+                        {skill}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center h-full space-y-6">
+                <div className="w-20 h-20 bg-zinc-50 dark:bg-zinc-900 rounded-3xl border border-zinc-100 dark:border-zinc-800 shadow-inner flex items-center justify-center">
+                  <Upload className="text-zinc-300 dark:text-zinc-700" size={32} />
+                </div>
+                <div className="space-y-1.5 max-w-xs">
+                  <h3 className="font-heading font-bold text-zinc-900 dark:text-zinc-100">Upload Resume Metadata</h3>
+                  <p className="text-sm text-zinc-500 font-medium">Standard PDF format, maximum allocation 5MB.</p>
+                </div>
+                <label className="group relative cursor-pointer pt-4">
+                  <input
+                    id="resume-file-input"
+                    type="file"
+                    accept=".pdf"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    disabled={uploading}
+                  />
+                  <span className="inline-flex h-12 items-center justify-center rounded-full bg-zinc-950 dark:bg-zinc-50 px-8 text-sm font-bold text-white dark:text-zinc-950 shadow-lg hover:scale-105 active:scale-95 transition-all w-full sm:w-auto">
+                    {uploading ? (
+                      <><Spinner size="sm" className="mr-3" /> Initializing...</>
+                    ) : (
+                      'Synchronize Metadata'
+                    )}
+                  </span>
+                </label>
+              </div>
+            )}
           </div>
-        </AnimatedCard>
+        </Card>
+
+        <Card className="lg:col-span-2 rounded-3xl bg-zinc-950 shadow-2xl flex flex-col justify-between overflow-hidden relative group">
+          <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] pointer-events-none" />
+          <div className="absolute -right-20 -top-20 w-64 h-64 bg-zinc-100/5 rounded-full blur-3xl pointer-events-none group-hover:bg-zinc-100/10 transition-colors duration-1000" />
+
+          <div className="relative z-10 p-10 space-y-6">
+            <div className="space-y-4">
+              <Badge className="bg-white/10 dark:bg-white/20 hover:bg-white/20 text-white border-0 text-[10px] font-bold uppercase tracking-[.2em] px-4 rounded-full">
+                LIVE INTERFACE
+              </Badge>
+              <h2 className="font-heading text-4xl font-bold tracking-tight text-white leading-tight">Adaptive Assessment Round</h2>
+              <p className="text-zinc-400 text-sm leading-relaxed font-medium">
+                Our dynamic engine will now synthesize a sequence of targeted scenarios based on your uploaded competency profile.
+              </p>
+            </div>
+
+            <div className="space-y-4 pt-10">
+              <Button
+                onClick={startNewInterview}
+                disabled={!resume}
+                size="lg"
+                className="w-full h-14 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 disabled:bg-zinc-800 disabled:text-zinc-600 transition-all font-bold text-base gap-3 shadow-xl shadow-white/5"
+              >
+                <Play size={18} fill="currentColor" />
+                Initialize Rounds
+              </Button>
+              <p className="text-center text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Estimated Round Duration: 25 MIN</p>
+            </div>
+          </div>
+        </Card>
       </div>
 
-      {completedInterviews.length > 0 && (
-        <AnimatedCard className="p-6">
-          <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-zinc-900">Performance Analytics</h2>
-            <PulseIndicator label="Live Insights" />
+      <Card className="rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-white/50 dark:bg-zinc-950/20 backdrop-blur-sm p-0 shadow-xl overflow-hidden">
+        <div className="border-b border-zinc-100 dark:border-zinc-900 px-10 py-6 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <History size={18} className="text-zinc-400" />
+            <h2 className="font-heading font-bold text-lg text-zinc-900 dark:text-zinc-100">Historical Ledger</h2>
           </div>
-          <Suspense fallback={<Skeleton className="h-52 w-full" />}>
-            <SkillAnalyticsDashboard interviews={interviews} />
-          </Suspense>
-        </AnimatedCard>
-      )}
-
-      <AnimatedCard className="p-6">
-        <h2 className="mb-4 text-xl font-semibold text-zinc-900">Interview History</h2>
+          <Badge variant="outline" className="rounded-sm font-mono font-bold text-[10px]">{interviews.length} SESSIONS</Badge>
+        </div>
 
         {interviews.length === 0 ? (
-          <div className="py-10 text-center">
-            <p className="text-lg font-medium text-zinc-700">No interviews yet</p>
-            <p className="mt-2 text-zinc-500">Kick off a new session to see AI feedback instantly.</p>
+          <div className="p-20 text-center space-y-2">
+            <p className="text-sm font-bold text-zinc-900 dark:text-zinc-100">No session telemetry recorded.</p>
+            <p className="text-xs text-zinc-500 font-medium">Complete your first round to establish a performance baseline.</p>
           </div>
         ) : (
-          <StaggerContainer className="space-y-3" delayStepMs={90}>
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-900">
             {interviews.map((interview) => {
               const completed = interview.status === 'completed';
-              const score = Math.min(100, interview.averageScore * 10);
-
               return (
-                <AnimatedCard
+                <div
                   key={interview._id}
-                  className="group cursor-pointer border border-zinc-200/70 bg-white/75 p-4"
-                  onClick={() =>
-                    navigate(completed ? `/candidate/results/${interview._id}` : `/candidate/interview/${interview._id}`)
-                  }
+                  onClick={() => navigate(completed ? `/candidate/results/${interview._id}` : `/candidate/interview/${interview._id}`)}
+                  className="group flex flex-col md:flex-row items-center justify-between p-10 cursor-pointer hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 transition-all gap-8"
                 >
-                  <div className="flex items-center justify-between gap-4">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
-                            completed ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                          }`}
-                        >
-                          {completed ? 'Completed' : 'In Progress'}
-                        </span>
-                        <span className="text-sm text-zinc-600">{new Date(interview.createdAt).toLocaleDateString()}</span>
-                        {completed && (
-                          <AnimatedTooltip content="Score trajectory">
-                            <span className="rounded-full bg-zinc-100 px-2 py-1 text-[11px] text-zinc-600">Sparkline</span>
-                          </AnimatedTooltip>
-                        )}
-                      </div>
-
-                      <div className="mt-3 flex items-center gap-3">
-                        <p className="text-sm text-zinc-700">
-                          {interview.answers.length} / {interview.questions.length} questions answered
-                        </p>
-                        {completed && <InterviewSparkline value={interview.averageScore} />}
-                      </div>
+                  <div className="flex-1 space-y-2 w-full">
+                    <div className="flex items-center gap-3">
+                      <Badge className={cn("px-3 rounded-full font-bold text-[10px] uppercase tracking-widest",
+                        completed ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20" : "bg-amber-500/10 text-amber-600 dark:text-amber-400 hover:bg-amber-500/20")}>
+                        {completed ? 'METADATA FINALIZED' : 'IN PROGRESS'}
+                      </Badge>
+                      <span className="text-[10px] font-bold text-zinc-400 font-mono tracking-widest">
+                        {new Date(interview.createdAt).toISOString().split('T')[0].replace(/-/g, ' • ')}
+                      </span>
                     </div>
+                    <h3 className="text-xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-3">
+                      Technical Assessment Protocol
+                      <ArrowUpRight size={18} className="text-zinc-300 transition-all opacity-0 group-hover:opacity-100 group-hover:translate-x-1 group-hover:-translate-y-1" />
+                    </h3>
+                    <p className="text-xs font-bold text-zinc-400 uppercase tracking-widest">
+                      {interview.answers.length} Processed Segments / {interview.questions.length} Round Target
+                    </p>
+                  </div>
 
-                    {completed && (
-                      <div className="min-w-[146px] text-right">
-                        <p className="text-2xl font-bold text-zinc-900">
-                          <CountUpNumber value={interview.averageScore} decimals={1} />
+                  {completed && (
+                    <div className="flex items-center gap-8 w-full md:w-auto justify-between border-t md:border-t-0 md:border-l border-zinc-100 dark:border-zinc-900 pt-8 md:pt-0 md:pl-8">
+                      <div className="text-right flex flex-col justify-end">
+                        <span className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest block mb-1">AGGREGATE SCORE</span>
+                        <p className="text-4xl font-heading font-bold text-zinc-900 dark:text-zinc-50 lining-nums leading-none">
+                          {interview.averageScore.toFixed(1)}<span className="text-lg text-zinc-400 font-medium ml-1">/10</span>
                         </p>
-                        <p className="mb-2 text-xs text-zinc-500">Avg Score</p>
-                        <AnimatedProgressBar value={score} max={100} showGlowTrail />
                       </div>
-                    )}
-                  </div>
-
-                  <div className="mt-2 hidden text-xs text-zinc-500 group-hover:block animate-fade-up">
-                    Click to open full question-level feedback and adaptive trend details.
-                  </div>
-                </AnimatedCard>
+                      <CheckCircle2 size={32} className="text-zinc-100 dark:text-zinc-900" />
+                    </div>
+                  )}
+                </div>
               );
             })}
-          </StaggerContainer>
+          </div>
         )}
-      </AnimatedCard>
+      </Card>
     </div>
   );
 }
