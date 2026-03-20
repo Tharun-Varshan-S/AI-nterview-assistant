@@ -4,6 +4,20 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
+    <script>
+      (() => {
+        const storageKey = 'vite-ui-theme';
+        const root = document.documentElement;
+        const storedTheme = localStorage.getItem(storageKey) || 'dark';
+        const systemTheme = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        const resolvedTheme = storedTheme === 'system' ? systemTheme : storedTheme;
+
+        root.classList.remove('light', 'dark');
+        root.classList.add(resolvedTheme);
+        root.style.colorScheme = resolvedTheme;
+        root.dataset.theme = storedTheme;
+      })();
+    </script>
     
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
