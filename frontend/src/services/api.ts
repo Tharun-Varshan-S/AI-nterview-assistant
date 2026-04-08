@@ -108,8 +108,11 @@ export interface Resume {
 
 export interface Question {
   id?: string;
+  type?: 'mcq' | 'coding' | 'theoretical';
   question: string;
-  type?: 'coding' | 'theoretical';
+  options?: string[];
+  correctAnswer?: string;
+  explanation?: string;
   difficulty: 'easy' | 'medium' | 'hard';
   topic?: string;
   domain?: string;
@@ -125,6 +128,7 @@ export interface Question {
 }
 
 export interface AIEvaluation {
+  pending?: boolean;
   score?: number;
   technicalAccuracy?: string;
   clarity?: string;
@@ -132,6 +136,8 @@ export interface AIEvaluation {
   strengths?: string[];
   weaknesses?: string[];
   improvements?: string[];
+  issue?: string;
+  correctConcept?: string;
   // Coding-specific fields
   logicScore?: number;
   readabilityScore?: number;
@@ -179,6 +185,7 @@ export interface Answer {
 
 export interface FinalEvaluation {
   overallScore: number;
+  summary?: string;
   technicalAccuracy?: number;
   clarity?: number;
   depth?: number;
@@ -188,6 +195,14 @@ export interface FinalEvaluation {
   improvements?: string[];
   hiringRecommendation?: string;
   recommendations?: string[];
+  mistakes?: Array<{
+    question: string;
+    userAnswer: string;
+    issue: string;
+    correctConcept: string;
+    improvement: string;
+  }>;
+  perQuestionScore?: Array<{ questionId: number; score: number; feedback: string }>;
   resumeConsistency?: ResumeConsistencyReport;
   skillTrajectory?: SkillTrajectoryEntry[];
   evaluatedAt?: string;
@@ -294,6 +309,20 @@ export interface PracticeSession {
   questionsAttempted: number;
   totalQuestions: number;
   completedAt?: string;
+  evaluationSummary?: {
+    score: number;
+    summary: string;
+    strengths: string[];
+    weaknesses: string[];
+    mistakes: Array<{
+      question: string;
+      userAnswer: string;
+      issue: string;
+      correctConcept: string;
+      improvement: string;
+    }>;
+    perQuestionScore: Array<{ questionId: number; score: number; feedback: string }>;
+  };
   createdAt: string;
 }
 
@@ -511,6 +540,8 @@ export const interviewAPI = {
         execution: any;
         complexity?: any;
         averageScore: number;
+        questionsAttempted?: number;
+        totalQuestions?: number;
       };
     }>('/practice/answer', payload);
     return data.data;
@@ -527,8 +558,34 @@ export const interviewAPI = {
         questionsAttempted: number;
         timeSpent: number;
         skillsImproved: string[];
+        evaluationSummary?: PracticeSession['evaluationSummary'];
       };
     }>('/practice/complete', { sessionId });
+    return data.data;
+  },
+
+  getPracticeSessionDetail: async (sessionId: string) => {
+    const { data } = await api.get<{
+      success: boolean;
+      data: PracticeSession & {
+        evaluationSummary?: {
+          score: number;
+          summary: string;
+          mistakes: Array<{
+            question: string;
+            userAnswer: string;
+            issue: string;
+            correctConcept: string;
+            improvement: string;
+          }>;
+          perQuestionScore: Array<{
+            questionId: number;
+            score: number;
+            feedback: string;
+          }>;
+        };
+      };
+    }>(`/practice/sessions/${sessionId}`);
     return data.data;
   },
 };

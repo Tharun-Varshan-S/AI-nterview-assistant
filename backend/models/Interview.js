@@ -120,6 +120,7 @@ const interviewSchema = new mongoose.Schema(
           autoSubmitted: Boolean
         },
         aiEvaluation: {
+          pending: Boolean,
           score: Number,
           technicalAccuracy: String,
           clarity: String,
@@ -127,6 +128,8 @@ const interviewSchema = new mongoose.Schema(
           strengths: [String],
           weaknesses: [String],
           improvements: [String],
+          issue: String,
+          correctConcept: String,
           // Coding-specific fields
           logicScore: Number,
           readabilityScore: Number,
@@ -134,7 +137,8 @@ const interviewSchema = new mongoose.Schema(
           finalCodingScore: Number,
           edgeCaseHandling: String,
           timeComplexity: String,
-          spaceComplexity: String
+          spaceComplexity: String,
+          improvementSuggestions: [String]
         },
         submittedAt: Date
       }
@@ -175,9 +179,26 @@ const interviewSchema = new mongoose.Schema(
     },
     finalEvaluation: {
       overallScore: Number,
+      summary: String,
       strengths: [String],
       weaknesses: [String],
       recommendations: [String],
+      mistakes: [
+        {
+          question: String,
+          userAnswer: String,
+          issue: String,
+          correctConcept: String,
+          improvement: String
+        }
+      ],
+      perQuestionScore: [
+        {
+          questionId: Number,
+          score: Number,
+          feedback: String
+        }
+      ],
       resumeConsistency: {
         resumeClaimAccuracy: Number,
         inflatedSkills: [String],

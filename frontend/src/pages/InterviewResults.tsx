@@ -360,6 +360,28 @@ export default function InterviewResults() {
 
       {/* Transcript Log */}
       <section className="space-y-8">
+        {finalEvaluation?.mistakes && finalEvaluation.mistakes.length > 0 && (
+          <Card className="border-zinc-200 dark:border-zinc-800 shadow-sm">
+            <CardHeader>
+              <CardTitle className="text-sm font-bold uppercase tracking-widest flex items-center gap-2">
+                <AlertCircle size={14} /> Mistake Breakdown
+              </CardTitle>
+              <CardDescription>Concept-level issues and correction guidance for each response.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {finalEvaluation.mistakes.map((mistake, idx) => (
+                <div key={`${mistake.question}-${idx}`} className="rounded-xl border border-zinc-200 dark:border-zinc-800 p-4 bg-zinc-50/60 dark:bg-zinc-900/40 space-y-2">
+                  <p className="text-xs font-bold uppercase tracking-wider text-zinc-500">Question {idx + 1}</p>
+                  <p className="text-sm font-semibold">{mistake.question}</p>
+                  <p className="text-sm"><span className="font-semibold text-rose-500">Issue:</span> {mistake.issue}</p>
+                  <p className="text-sm"><span className="font-semibold text-blue-500">Correct Concept:</span> {mistake.correctConcept}</p>
+                  <p className="text-sm"><span className="font-semibold text-emerald-600 dark:text-emerald-400">Improve:</span> {mistake.improvement}</p>
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
+
         <div className="flex items-center justify-between">
           <h2 className="text-3xl font-heading font-bold tracking-tight">Interview Ledger</h2>
           <Badge variant="secondary" className="px-3 rounded-full font-mono text-xs">{interview.answers?.length} ENTRIES</Badge>
@@ -421,11 +443,10 @@ export default function InterviewResults() {
                               </div>
                             ) : (
                               <div className="space-y-2">
-                                <div className="flex justify-between text-[10px] font-bold opacity-60">
-                                  <span>Technical Accuracy</span>
-                                  <span className="text-blue-600 dark:text-blue-400">{answer.aiEvaluation.technicalAccuracy}%</span>
-                                </div>
-                                <Progress value={Number(answer.aiEvaluation.technicalAccuracy) || 0} className="h-1" />
+                                <p className="text-[9px] font-bold uppercase opacity-50">Technical Accuracy</p>
+                                <p className="text-xs leading-relaxed font-medium text-blue-700 dark:text-blue-300">
+                                  {answer.aiEvaluation.technicalAccuracy || 'Detailed evaluation generated.'}
+                                </p>
                               </div>
                             )}
 
@@ -433,9 +454,11 @@ export default function InterviewResults() {
 
                             <div className="space-y-2">
                               <p className="text-[9px] font-bold uppercase opacity-50">Segment Insight</p>
-                              <p className="text-xs leading-relaxed font-medium">
-                                {answer.aiEvaluation.depth || answer.aiEvaluation.logicScore || 'Evaluation metrics computed successfully.'}
-                              </p>
+                              <p className="text-xs leading-relaxed font-medium">{answer.aiEvaluation.issue || answer.aiEvaluation.depth || 'Evaluation metrics computed successfully.'}</p>
+                              <p className="text-xs leading-relaxed font-medium text-emerald-700 dark:text-emerald-300">{answer.aiEvaluation.correctConcept || ''}</p>
+                              {Array.isArray(answer.aiEvaluation.improvements) && answer.aiEvaluation.improvements.length > 0 && (
+                                <p className="text-xs leading-relaxed font-medium text-zinc-600 dark:text-zinc-300">Improve: {answer.aiEvaluation.improvements[0]}</p>
+                              )}
                             </div>
                           </div>
                         </div>

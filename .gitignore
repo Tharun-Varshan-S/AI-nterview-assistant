@@ -48,6 +48,9 @@ Thumbs.db
 
 # Testing
 coverage/
+
+# Project directories
+ai-interview-flow-10/
 .nyc_output/
 
 # Misc

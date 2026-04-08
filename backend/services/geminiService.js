@@ -5,13 +5,21 @@ const {
   questionPrompt,
   evaluationPrompt,
   codingPrompt,
+  topicCodingPrompt,
   ensureRequiredKeys,
   buildPromptPayload
 } = require('./prompts');
+const {
+  getFallbackCodingQuestion,
+  getFallbackCodingQuestions,
+  getFallbackTheoreticalQuestion,
+  getFallbackTheoreticalQuestions
+} = require('./fallbackQuestions');
 
 const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent';
 const DELAY_MS = 1500;
 const RETRY_BACKOFF = [1500, 3000];
+const USE_MOCK = process.env.USE_MOCK === 'true' || false;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -21,6 +29,30 @@ const sanitizeJsonLikeText = (text) =>
     .replace(/```/g, '')
     .replace(/,\s*([}\]])/g, '$1')
     .trim();
+
+function validateTestCases(question) {
+  if (!question || !Array.isArray(question.test_cases) || question.test_cases.length === 0) return false;
+
+  return question.test_cases.every((tc) =>
+    tc &&
+    typeof tc.input === 'string' &&
+    typeof tc.output === 'string' &&
+    tc.input.trim() !== '' &&
+    tc.output.trim() !== ''
+  );
+}
+
+const isRateLimitError = (error) => {
+  const status = Number(error?.response?.status);
+  const message = String(error?.message || '').toLowerCase();
+  const payload = JSON.stringify(error?.response?.data || {}).toLowerCase();
+  return status === 429 || message.includes('quota') || message.includes('limit') || payload.includes('quota') || payload.includes('limit');
+};
+
+const getRateLimitResponse = () => ({
+  errorType: 'RATE_LIMIT',
+  message: 'API limit reached'
+});
 
 const findBalancedJsonSnippet = (text) => {
   const src = String(text || '');
@@ -103,6 +135,10 @@ const extractJsonObject = (text) => {
 };
 
 const callGemini = async (prompt, attempt = 0) => {
+  if (USE_MOCK) {
+    throw new Error('Mock mode enabled');
+  }
+
   if (!process.env.GEMINI_API_KEY) {
     logger.error('GEMINI_API_KEY environment variable not set');
     throw new Error('Gemini API key is not configured');
@@ -112,10 +148,15 @@ const callGemini = async (prompt, attempt = 0) => {
 
   try {
     const requestBody = {
-      contents: [{ parts: [{ text: prompt }] }],
+      contents: [
+        {
+          role: 'user',
+          parts: [{ text: prompt }]
+        }
+      ],
       generationConfig: {
-        temperature: 0.2,
-        maxOutputTokens: 4096
+        temperature: 0.7,
+        maxOutputTokens: 2048
       }
     };
 
@@ -180,8 +221,81 @@ const callGeminiWithPromptControl = async ({ prompt, promptVersion, schema, fall
     return fallback;
   } catch (error) {
     logger.error('Gemini call failed with prompt control', { promptVersion, error: error.message });
+    if (isRateLimitError(error)) {
+      return {
+        ...(fallback && typeof fallback === 'object' ? fallback : {}),
+        ...getRateLimitResponse()
+      };
+    }
     return fallback;
   }
+};
+
+const normalizeGeneratedCodingQuestion = (q = {}, topic = 'Arrays', difficulty = 'medium') => {
+  const normalizedTestCases = (Array.isArray(q.test_cases) ? q.test_cases : Array.isArray(q.testCases) ? q.testCases : [])
+    .map((tc) => ({
+      input: String(tc?.input ?? '').trim(),
+      output: String(tc?.output ?? tc?.expected ?? tc?.expectedOutput ?? '').trim()
+    }));
+
+  return {
+    title: String(q.title || '').trim(),
+    description: String(q.description || q.question || '').trim(),
+    input_format: String(q.input_format || q.inputFormat || '').trim(),
+    output_format: String(q.output_format || q.outputFormat || '').trim(),
+    constraints: Array.isArray(q.constraints)
+      ? q.constraints.map(String)
+      : String(q.constraints || '').trim(),
+    function_signature: String(q.function_signature || q.functionSignature || 'def solve():').trim(),
+    test_cases: normalizedTestCases,
+    difficulty: String(q.difficulty || difficulty).toLowerCase(),
+    topic: String(q.topic || topic).trim(),
+    tags: Array.isArray(q.tags) ? q.tags.map(String) : [String(q.topic || topic).trim()]
+  };
+};
+
+const toPlatformQuestion = (question) => {
+  const mappedTestCases = question.test_cases.map((tc, index) => ({
+    input: tc.input,
+    expected: tc.output,
+    isHidden: index >= 2,
+    description: index < 2 ? 'Visible generated test case' : 'Hidden generated test case'
+  }));
+
+  return {
+    title: question.title,
+    description: question.description,
+    question: question.description,
+    type: 'coding',
+    difficulty: question.difficulty,
+    topic: question.topic,
+    domain: 'Data Structures & Algorithms',
+    timeLimit: 180,
+    isCoding: true,
+    input_format: question.input_format,
+    output_format: question.output_format,
+    function_signature: question.function_signature,
+    inputFormat: question.input_format,
+    outputFormat: question.output_format,
+    constraints: Array.isArray(question.constraints)
+      ? question.constraints
+      : String(question.constraints || '').trim()
+        ? [String(question.constraints).trim()]
+        : [],
+    examples: question.test_cases.slice(0, 2).map((tc) => ({
+      input: tc.input,
+      output: tc.output,
+      explanation: 'Generated example'
+    })),
+    test_cases: question.test_cases.map((tc, index) => ({
+      input: tc.input,
+      output: tc.output,
+      isHidden: index >= 2
+    })),
+    testCases: mappedTestCases,
+    hiddenTestCases: mappedTestCases.filter((tc) => tc.isHidden),
+    tags: question.tags
+  };
 };
 
 const normalizeQuestion = (q = {}) => {
@@ -234,6 +348,23 @@ const normalizeQuestionsPayload = (payload, expectedCount = 6) => {
 
   if (!valid) return null;
 
+  // Validate that any coding question has valid test cases
+  for (const q of normalized) {
+    const normalizedQuestion = {
+      test_cases: Array.isArray(q.testCases)
+        ? q.testCases.map((tc) => ({
+            input: Array.isArray(tc?.input) ? String(tc.input[0] ?? '') : String(tc?.input ?? ''),
+            output: String(tc?.expectedOutput ?? '')
+          }))
+        : []
+    };
+
+    if (q.isCoding && !validateTestCases(normalizedQuestion)) {
+      logger.warn('AI generated coding question failed test cases validation', { question: q.question });
+      return null; // Will trigger fallback
+    }
+  }
+
   return { questions: normalized };
 };
 
@@ -257,22 +388,62 @@ exports.validateAndExtractResume = async (resumeText) => {
 };
 
 exports.generateInterviewQuestions = async (context) => {
-  const payload = buildPromptPayload({
-    prompt: questionPrompt.buildQuestionPrompt(context),
-    version: questionPrompt.version,
-    schema: questionPrompt.schema,
-    fallback: null
-  });
+  try {
+    const payload = buildPromptPayload({
+      prompt: questionPrompt.buildQuestionPrompt(context),
+      version: questionPrompt.version,
+      schema: questionPrompt.schema,
+      fallback: null
+    });
 
-  const result = await callGeminiWithPromptControl({
-    prompt: payload.prompt,
-    promptVersion: payload.version,
-    schema: payload.schema,
-    fallback: payload.fallback
-  });
+    const result = await callGeminiWithPromptControl({
+      prompt: payload.prompt,
+      promptVersion: payload.version,
+      schema: payload.schema,
+      fallback: payload.fallback
+    });
 
-  if (!result) return null;
-  return normalizeQuestionsPayload(result, context?.questionCount || 6);
+    if (!result) {
+      logger.warn('Interview question generation failed, using fallback', { context });
+      // Build fallback questions based on context
+      const fallbackQuestions = buildFallbackInterviewQuestions(context);
+      return fallbackQuestions;
+    }
+    const normalized = normalizeQuestionsPayload(result, context?.questionCount || 6);
+    if (!normalized) {
+      logger.warn('Interview question payload invalid, using fallback', { context });
+      return buildFallbackInterviewQuestions(context);
+    }
+    return normalized;
+  } catch (error) {
+    logger.error('generateInterviewQuestions error, using fallback', { error: error.message });
+    const fallbackQuestions = buildFallbackInterviewQuestions(context);
+    return fallbackQuestions;
+  }
+};
+
+// Helper function to build fallback interview questions
+const buildFallbackInterviewQuestions = (context) => {
+  const count = context?.questionCount || 6;
+  const topics = context?.focusTopics || ['Arrays', 'Data Structures', 'Algorithms'];
+
+  if (context?.interviewType === 'coding') {
+    const topic = topics[0] || 'Arrays';
+    return { questions: getFallbackCodingQuestions({ topic, difficulty: 'medium', count }) };
+  }
+
+  if (context?.interviewType === 'mixed') {
+    const codingCount = Math.max(1, Math.floor(count / 2));
+    const theoryCount = Math.max(1, count - codingCount);
+    const codingTopic = topics[0] || 'Arrays';
+    const codingQuestions = getFallbackCodingQuestions({ topic: codingTopic, difficulty: 'medium', count: codingCount });
+    const theoryQuestions = getFallbackTheoreticalQuestions({ topics, count: theoryCount });
+    return { questions: [...codingQuestions, ...theoryQuestions].slice(0, count) };
+  }
+
+  return {
+    questions: getFallbackTheoreticalQuestions({ topics, count })
+  };
 };
 
 exports.generateInterviewQuestionsWithMetadata = async (context) => {
@@ -292,6 +463,8 @@ exports.evaluateAnswer = async (question, answer) => {
       strengths: ['Response provided'],
       weaknesses: ['Evaluation pending'],
       improvements: ['Retry evaluation'],
+      issue: 'Final evaluator unavailable.',
+      correctConcept: 'Provide a structured answer covering core concept, reasoning, and example.',
       genericFlags: [],
       promptVersion: evaluationPrompt.version
     }
@@ -392,4 +565,37 @@ exports.generateSkillGapReport = async (userSkillSummary) => {
     schema: payload.schema,
     fallback: payload.fallback
   });
+};
+
+/**
+ * Generate topic-specific coding problems
+ * This is the key function for practice mode coding questions
+ *
+ * @param {Object} options
+ * @param {string} options.topic - The DSA topic (e.g., "dp", "trees", "graphs")
+ * @param {string} options.difficulty - "easy" | "medium" | "hard"
+ * @param {number} options.count - Number of questions to generate (default: 1)
+ * @returns {Object} - { questions: [...] } with LeetCode-style problems
+ */
+exports.generateTopicCodingQuestion = async ({ topic, difficulty = 'medium', count = 1 }) => {
+  const fallbackQuestions = getFallbackCodingQuestions({ topic, difficulty, count });
+
+  if (USE_MOCK) {
+    console.log('QUESTION:', fallbackQuestions[0]?.title);
+    console.log('TEST CASES:', fallbackQuestions[0]?.test_cases);
+    return { questions: fallbackQuestions, isFallback: true, mock: true };
+  }
+
+  try {
+    // Use deterministic local question bank as primary source to avoid random or repeated AI-generated coding prompts.
+    // Gemini is retained as helper for code evaluation, not for coding prompt generation.
+    return { questions: fallbackQuestions, isFallback: true };
+  } catch (error) {
+    console.warn('AI failed, using fallback', error);
+    logger.error('generateTopicCodingQuestion error, using fallback', { error: error.message, topic, difficulty });
+    if (isRateLimitError(error)) {
+      return { questions: fallbackQuestions, isFallback: true, rateLimit: getRateLimitResponse() };
+    }
+    return { questions: fallbackQuestions, isFallback: true };
+  }
 };

@@ -2,12 +2,13 @@ const { VM } = require('vm2');
 const geminiService = require('./geminiService');
 const logger = require('../utils/logger');
 
+const judge0Service = require('./judge0Service');
+
 /**
  * Code Execution Simulator
  * 
  * Simulates code execution for visual feedback in coding practice
- * - Node.js: Uses VM sandbox for actual execution
- * - Other languages: Uses Gemini for analysis
+ * Now uses Judge0 batch execution for deterministic single-run behavior.
  */
 
 class CodeExecutionSimulator {
@@ -67,12 +68,12 @@ class CodeExecutionSimulator {
           ...baseResponse,
           passed: true,
           results: [
-          {
-            input: 'No test cases',
-            expected: 'N/A',
-            actual: 'Code executed without errors',
-            passed: true,
-          },
+            {
+              input: 'No test cases',
+              expected: 'N/A',
+              actual: 'Code executed without errors',
+              passed: true,
+            },
           ]
         });
       }
@@ -201,12 +202,35 @@ Respond with a JSON object exactly in this format:
    * @returns {object} Execution results
    */
   static async execute(code, language = 'javascript', testCases = []) {
-    if (language.toLowerCase() === 'javascript' || language.toLowerCase() === 'js') {
-      return this.executeJavaScript(code, testCases);
+    let languageId = judge0Service.LANGUAGE_IDS[language.toLowerCase()];
+    if (!languageId) {
+      if (language.toLowerCase() === 'js') languageId = 63;
+      else if (language.toLowerCase() === 'python3') languageId = 71;
+      else languageId = 63; // fallback
     }
-
-    // For other languages, use Gemini
-    return this.executeWithGemini(code, language, testCases);
+    
+    try {
+        const batchResult = await judge0Service.executeBatch(code, languageId, testCases);
+        return {
+            passed: batchResult.passed,
+            results: batchResult.results,
+            error: batchResult.error,
+            output: batchResult.output,
+            // also provide testResults, runtimeError for legacy shape compatibility
+            testResults: batchResult.results,
+            runtimeError: batchResult.error
+        };
+    } catch (err) {
+        logger.error('Batch execution error:', err);
+        return {
+            passed: false,
+            results: [],
+            error: err.message,
+            output: '',
+            testResults: [],
+            runtimeError: err.message
+        };
+    }
   }
 
   /**

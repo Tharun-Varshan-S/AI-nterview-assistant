@@ -9,11 +9,16 @@ const VALIDATION_CONFIG = {
   MIME_TYPES: ['application/pdf', 'application/x-pdf'],
   MIN_WORD_COUNT: 150,
   CONFIDENCE_THRESHOLD: 60,
+  RESUME_LIKELIHOOD_THRESHOLD: 0.55,
   REQUIRED_KEYWORDS: [
     'experience', 'education', 'skills', 'project', 'work',
     'degree', 'university', 'college', 'certification',
     'technical', 'programming', 'language', 'framework',
   ],
+  SECTION_HEADERS: [
+    'experience', 'work experience', 'professional experience', 'education',
+    'skills', 'projects', 'certifications', 'internship', 'summary', 'profile'
+  ]
 };
 
 /**
@@ -171,11 +176,68 @@ const performBasicValidation = (mimeType, text) => {
   };
 };
 
+const detectResumeLikelihood = (text) => {
+  if (!text || typeof text !== 'string') {
+    return { isLikelyResume: false, score: 0, evidence: [] };
+  }
+
+  const normalized = text.toLowerCase();
+  const evidence = [];
+  let score = 0;
+
+  const headerHits = VALIDATION_CONFIG.SECTION_HEADERS.filter((header) => normalized.includes(header));
+  if (headerHits.length >= 3) {
+    score += 0.35;
+    evidence.push(`section_headers:${headerHits.length}`);
+  } else if (headerHits.length >= 2) {
+    score += 0.2;
+    evidence.push(`section_headers:${headerHits.length}`);
+  }
+
+  const emailMatch = /[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}/i.test(text);
+  const phoneMatch = /(?:\+?\d{1,3}[\s-]?)?(?:\(?\d{3,5}\)?[\s-]?)?\d{3,5}[\s-]?\d{3,5}/.test(text);
+  if (emailMatch) {
+    score += 0.2;
+    evidence.push('email_present');
+  }
+  if (phoneMatch) {
+    score += 0.1;
+    evidence.push('phone_present');
+  }
+
+  const bulletDensity = (text.match(/[•\-*]\s+/g) || []).length;
+  if (bulletDensity >= 5) {
+    score += 0.15;
+    evidence.push('bullet_points');
+  }
+
+  const datePattern = /(20\d{2}|19\d{2})|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/gi;
+  const dateMentions = (text.match(datePattern) || []).length;
+  if (dateMentions >= 3) {
+    score += 0.1;
+    evidence.push('date_timeline');
+  }
+
+  const keywordResult = validateKeywords(text);
+  if (keywordResult) {
+    score += 0.15;
+    evidence.push('resume_keywords');
+  }
+
+  const boundedScore = Number(Math.min(1, score).toFixed(2));
+  return {
+    isLikelyResume: boundedScore >= VALIDATION_CONFIG.RESUME_LIKELIHOOD_THRESHOLD,
+    score: boundedScore,
+    evidence,
+  };
+};
+
 module.exports = {
   validateMimeType,
   validateWordCount,
   validateKeywords,
   extractStructuredData,
   performBasicValidation,
+  detectResumeLikelihood,
   VALIDATION_CONFIG,
 };

@@ -10,7 +10,7 @@ const buildQuestionPrompt = ({ structuredData, rawText, focusTopics = [], interv
     domainContext = `Context extracted from raw text: ${(rawText || '').substring(0, 1000)}`;
   }
 
-  const focusTopicsText = focusTopics.length > 0 ? `Prioritize these topics: ${focusTopics.join(', ')}.` : '';
+  const focusTopicsText = focusTopics.length > 0 ? `Prioritize these topics: ${focusTopics.join(', ')}.` : 'Use resume skills and technologies only.';
   const safeCount = Number.isFinite(Number(questionCount)) ? Math.max(3, Math.min(10, Number(questionCount))) : 6;
   const typeMode = ['theoretical', 'coding', 'mixed'].includes(interviewType) ? interviewType : 'theoretical';
 
@@ -58,6 +58,9 @@ REQUIREMENTS:
 - Generate exactly ${safeCount} questions.
 - Difficulty split should be balanced across easy/medium/hard.
 - Each question must have a unique topic.
+- Never repeat any question wording.
+- Never ask definition-only or yes/no questions.
+- Use only the provided candidate skills/technologies/topics.
 - Keep each question under 80 words.
 - Keep topic under 4 words.
 - ${compositionRule}
@@ -69,6 +72,8 @@ REQUIREMENTS:
   - testCases must be [].
 - Match candidate skills: ${structuredData?.skills?.join(', ') || 'General'}
 - ${focusTopicsText}
+
+If you cannot satisfy these constraints reliably, return exactly: {"fallback": true, "questions": []}
 
 CANDIDATE INFO:
 ${domainContext}`;

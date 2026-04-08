@@ -3,6 +3,31 @@ import { useNavigate } from 'react-router-dom';
 import { PracticeSession, interviewAPI } from '../services/api';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { cn } from '@/lib/utils';
+import {
+  Brain,
+  Code2,
+  Settings,
+  UserCircle,
+  ArrowRight,
+  ArrowLeft,
+  Play,
+  History,
+  BarChart3,
+  TrendingUp,
+  Target,
+  Zap,
+  CheckCircle2,
+  Clock,
+  Trophy,
+  Sparkles,
+  ChevronRight
+} from 'lucide-react';
 
 type PracticeMode = '' | 'aptitude' | 'coding' | 'technical' | 'behavioral';
 
@@ -19,38 +44,50 @@ export default function PracticePage() {
   const modes = [
     {
       id: 'aptitude',
-      name: 'Aptitude Practice',
-      description: 'Improve your logical reasoning and problem solving skills',
-      icon: '🧮',
-      color: 'from-blue-500 to-cyan-500',
+      name: 'Aptitude',
+      description: 'Logical reasoning, quantitative and verbal skills',
+      icon: Brain,
+      gradient: 'from-blue-500 to-cyan-500',
+      bgGradient: 'from-blue-500/10 to-cyan-500/5',
+      iconColor: 'text-blue-500',
+      borderColor: 'border-blue-500/20 hover:border-blue-500/40',
     },
     {
       id: 'coding',
-      name: 'Coding Practice',
-      description: 'Practice coding problems with real-time execution',
-      icon: '💻',
-      color: 'from-purple-500 to-pink-500',
+      name: 'Coding',
+      description: 'DSA problems with real-time code execution',
+      icon: Code2,
+      gradient: 'from-violet-500 to-purple-500',
+      bgGradient: 'from-violet-500/10 to-purple-500/5',
+      iconColor: 'text-violet-500',
+      borderColor: 'border-violet-500/20 hover:border-violet-500/40',
     },
     {
       id: 'technical',
-      name: 'Technical Q&A',
-      description: 'Test your technical knowledge across domains',
-      icon: '⚙️',
-      color: 'from-orange-500 to-red-500',
+      name: 'Technical',
+      description: 'Core CS concepts, system design, and more',
+      icon: Settings,
+      gradient: 'from-orange-500 to-red-500',
+      bgGradient: 'from-orange-500/10 to-red-500/5',
+      iconColor: 'text-orange-500',
+      borderColor: 'border-orange-500/20 hover:border-orange-500/40',
     },
     {
       id: 'behavioral',
-      name: 'Behavioral Practice',
-      description: 'Master behavioral and HR interview questions',
-      icon: '🎯',
-      color: 'from-green-500 to-emerald-500',
+      name: 'Behavioral',
+      description: 'HR questions and soft skill assessment',
+      icon: UserCircle,
+      gradient: 'from-emerald-500 to-teal-500',
+      bgGradient: 'from-emerald-500/10 to-teal-500/5',
+      iconColor: 'text-emerald-500',
+      borderColor: 'border-emerald-500/20 hover:border-emerald-500/40',
     },
   ];
 
   const topics = {
     aptitude: ['Logical Reasoning', 'Quantitative Aptitude', 'Verbal Ability', 'Critical Thinking'],
-    coding: ['Arrays', 'Strings', 'Trees', 'Graphs', 'Dynamic Programming', 'Sorting'],
-    technical: ['Data Structures', 'DBMS', 'OOP', 'System Design', 'APIs', 'Web Dev'],
+    coding: ['Arrays', 'Strings', 'Trees', 'Graphs', 'Dynamic Programming', 'Sorting & Searching'],
+    technical: ['Data Structures', 'DBMS', 'OOP Concepts', 'System Design', 'REST APIs', 'Web Development'],
     behavioral: ['Teamwork', 'Leadership', 'Problem Solving', 'Conflict Resolution', 'Motivation'],
   };
 
@@ -104,242 +141,400 @@ export default function PracticePage() {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">Practice Hub</h1>
-          <p className="text-slate-400">Master different interview skills with our comprehensive practice modes</p>
-        </div>
+  const selectedModeData = modes.find((m) => m.id === selectedMode);
 
-        {/* Tabs */}
-        <div className="flex gap-4 mb-8 border-b border-slate-700">
-          <button
+  return (
+    <div className="space-y-8 pb-12 animate-in fade-in duration-700">
+      {/* Header */}
+      <div className="relative overflow-hidden rounded-3xl border border-zinc-200 dark:border-zinc-800 bg-gradient-to-br from-zinc-900 via-zinc-800 to-zinc-900 dark:from-zinc-950 dark:via-zinc-900 dark:to-zinc-950 p-8 shadow-2xl">
+        <div className="absolute inset-0 bg-[url('data:image/svg+xml,%3Csvg viewBox=%270 0 400 400%27 xmlns=%27http://www.w3.org/2000/svg%27%3E%3Cfilter id=%27noiseFilter%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.65%27 numOctaves=%273%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23noiseFilter)%27/%3E%3C/svg%3E')] opacity-20" />
+        <div className="absolute -top-32 -right-32 h-64 w-64 rounded-full bg-violet-500/20 blur-3xl" />
+        <div className="absolute -bottom-32 -left-32 h-64 w-64 rounded-full bg-blue-500/20 blur-3xl" />
+        <div className="relative z-10">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="p-2 rounded-xl bg-white/10 backdrop-blur-sm">
+              <Sparkles className="h-5 w-5 text-white" />
+            </div>
+            <Badge className="bg-white/10 text-white border-white/20 uppercase text-[10px] font-bold tracking-widest">
+              Skill Building
+            </Badge>
+          </div>
+          <h1 className="text-4xl font-heading font-bold tracking-tight text-white">Practice Hub</h1>
+          <p className="mt-2 text-zinc-400 max-w-lg text-sm">
+            Master interview skills across aptitude, coding, technical, and behavioral domains with AI-powered feedback.
+          </p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <Tabs defaultValue="modes" className="space-y-6">
+        <TabsList className="h-12 bg-zinc-100 dark:bg-zinc-900 p-1 rounded-xl">
+          <TabsTrigger
+            value="modes"
             onClick={() => {
               setActiveTab('modes');
               setSelectedMode('');
             }}
-            className={`px-6 py-3 font-medium transition-all ${
-              activeTab === 'modes'
-                ? 'text-white border-b-2 border-blue-500'
-                : 'text-slate-400 hover:text-slate-300'
-            }`}
+            className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:shadow-sm rounded-lg gap-2 px-6"
           >
+            <Target size={16} />
             Practice Modes
-          </button>
-          <button
+          </TabsTrigger>
+          <TabsTrigger
+            value="history"
             onClick={() => {
               setActiveTab('history');
               loadHistory();
             }}
-            className={`px-6 py-3 font-medium transition-all ${
-              activeTab === 'history'
-                ? 'text-white border-b-2 border-blue-500'
-                : 'text-slate-400 hover:text-slate-300'
-            }`}
+            className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:shadow-sm rounded-lg gap-2 px-6"
           >
-            Session History
-          </button>
-          <button
+            <History size={16} />
+            History
+          </TabsTrigger>
+          <TabsTrigger
+            value="stats"
             onClick={() => {
               setActiveTab('stats');
               loadStats();
             }}
-            className={`px-6 py-3 font-medium transition-all ${
-              activeTab === 'stats'
-                ? 'text-white border-b-2 border-blue-500'
-                : 'text-slate-400 hover:text-slate-300'
-            }`}
+            className="data-[state=active]:bg-white dark:data-[state=active]:bg-zinc-800 data-[state=active]:shadow-sm rounded-lg gap-2 px-6"
           >
+            <BarChart3 size={16} />
             Statistics
-          </button>
-        </div>
+          </TabsTrigger>
+        </TabsList>
 
-        {/* Content */}
-        {activeTab === 'modes' && (
-          <div className="space-y-8">
-            {/* Mode Selection */}
-            {!selectedMode ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {modes.map((mode) => (
-                  <button
+        {/* Practice Modes Tab */}
+        <TabsContent value="modes" className="space-y-6 mt-0">
+          {!selectedMode ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {modes.map((mode) => {
+                const Icon = mode.icon;
+                return (
+                  <Card
                     key={mode.id}
                     onClick={() => setSelectedMode(mode.id as PracticeMode)}
-                    className="group bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-6 hover:border-slate-500 transition-all hover:scale-105"
+                    className={cn(
+                      "relative overflow-hidden cursor-pointer transition-all duration-300 hover:shadow-2xl hover:scale-[1.02] group",
+                      "border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl",
+                      mode.borderColor
+                    )}
                   >
-                    <div className="text-5xl mb-4">{mode.icon}</div>
-                    <h3 className="text-xl font-bold text-white mb-2">{mode.name}</h3>
-                    <p className="text-slate-400 text-sm">{mode.description}</p>
-                    <div className={`mt-4 h-1 rounded-full bg-gradient-to-r ${mode.color} opacity-0 group-hover:opacity-100 transition-opacity`} />
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-2xl p-8">
-                {/* Mode Header */}
-                <div className="mb-8">
-                  <button
+                    <div className={cn("absolute inset-0 bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity", mode.bgGradient)} />
+                    <CardHeader className="relative pb-2">
+                      <div className="flex items-start justify-between">
+                        <div className={cn("p-3 rounded-2xl bg-gradient-to-br", mode.bgGradient)}>
+                          <Icon className={cn("h-6 w-6", mode.iconColor)} />
+                        </div>
+                        <ArrowRight className="h-5 w-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity transform group-hover:translate-x-1" />
+                      </div>
+                    </CardHeader>
+                    <CardContent className="relative space-y-2">
+                      <CardTitle className="text-xl font-heading font-bold">{mode.name}</CardTitle>
+                      <CardDescription className="text-sm">{mode.description}</CardDescription>
+                      <div className={cn("h-1 w-16 rounded-full bg-gradient-to-r opacity-0 group-hover:opacity-100 transition-all", mode.gradient)} />
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          ) : (
+            <Card className="border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl shadow-xl overflow-hidden">
+              <CardHeader className="border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+                <div className="flex items-center gap-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setSelectedMode('')}
-                    className="text-blue-400 hover:text-blue-300 text-sm font-medium mb-4"
+                    className="gap-2 text-muted-foreground hover:text-foreground"
                   >
-                    ← Back to modes
-                  </button>
-                  <h2 className="text-2xl font-bold text-white mb-2">
-                    {modes.find((m) => m.id === selectedMode)?.name}
-                  </h2>
-                  <p className="text-slate-400">Configure your practice session</p>
+                    <ArrowLeft size={16} />
+                    Back
+                  </Button>
+                  <div className="h-6 w-px bg-border" />
+                  <div className="flex items-center gap-3">
+                    {selectedModeData && (
+                      <div className={cn("p-2 rounded-xl bg-gradient-to-br", selectedModeData.bgGradient)}>
+                        <selectedModeData.icon className={cn("h-5 w-5", selectedModeData.iconColor)} />
+                      </div>
+                    )}
+                    <div>
+                      <CardTitle className="text-lg font-heading font-bold">{selectedModeData?.name} Practice</CardTitle>
+                      <CardDescription className="text-xs">Configure your session</CardDescription>
+                    </div>
+                  </div>
                 </div>
+              </CardHeader>
 
+              <CardContent className="p-8 space-y-8">
                 {/* Topic Selection */}
-                <div className="mb-6">
-                  <label className="block text-white font-semibold mb-3">Select Topic</label>
+                <div className="space-y-4">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Select Topic
+                  </label>
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {(topics[selectedMode as keyof typeof topics] || []).map((topic) => (
-                      <button
+                      <Button
                         key={topic}
+                        variant={selectedTopic === topic ? "default" : "outline"}
                         onClick={() => setSelectedTopic(topic)}
-                        className={`px-4 py-2 rounded-lg font-medium transition-all ${
-                          selectedTopic === topic
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                        }`}
+                        className={cn(
+                          "h-auto py-3 px-4 justify-start font-medium transition-all",
+                          selectedTopic === topic && "bg-zinc-900 dark:bg-white text-white dark:text-zinc-900"
+                        )}
                       >
                         {topic}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
 
                 {/* Difficulty Selection */}
-                <div className="mb-8">
-                  <label className="block text-white font-semibold mb-3">Select Difficulty</label>
+                <div className="space-y-4">
+                  <label className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
+                    Difficulty Level
+                  </label>
                   <div className="flex gap-3">
                     {(['easy', 'medium', 'hard'] as const).map((level) => (
-                      <button
+                      <Button
                         key={level}
+                        variant={selectedDifficulty === level ? "default" : "outline"}
                         onClick={() => setSelectedDifficulty(level)}
-                        className={`px-6 py-2 rounded-lg font-medium transition-all capitalize ${
-                          selectedDifficulty === level
-                            ? 'bg-blue-500 text-white'
-                            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-                        }`}
+                        className={cn(
+                          "flex-1 h-auto py-3 capitalize font-semibold transition-all",
+                          selectedDifficulty === level && "shadow-lg",
+                          level === 'easy' && selectedDifficulty === level && "bg-emerald-600 hover:bg-emerald-700",
+                          level === 'medium' && selectedDifficulty === level && "bg-amber-600 hover:bg-amber-700",
+                          level === 'hard' && selectedDifficulty === level && "bg-rose-600 hover:bg-rose-700"
+                        )}
                       >
+                        {level === 'easy' && <Zap size={16} className="mr-2" />}
+                        {level === 'medium' && <Target size={16} className="mr-2" />}
+                        {level === 'hard' && <Trophy size={16} className="mr-2" />}
                         {level}
-                      </button>
+                      </Button>
                     ))}
                   </div>
                 </div>
 
                 {/* Start Button */}
-                <button
+                <Button
                   onClick={startPractice}
                   disabled={loading || !selectedTopic}
-                  className="w-full bg-gradient-to-r from-blue-500 to-cyan-500 text-white font-bold py-3 rounded-xl hover:shadow-lg hover:shadow-blue-500/50 transition-all disabled:opacity-50"
+                  size="lg"
+                  className={cn(
+                    "w-full h-14 text-lg font-bold rounded-2xl shadow-xl transition-all",
+                    "bg-gradient-to-r hover:shadow-2xl hover:scale-[1.01]",
+                    selectedModeData ? selectedModeData.gradient : "from-violet-600 to-blue-600"
+                  )}
                 >
-                  {loading ? <Spinner size="sm" /> : 'Start Practice Session'}
-                </button>
-              </div>
-            )}
-          </div>
-        )}
+                  {loading ? (
+                    <Spinner size="sm" />
+                  ) : (
+                    <>
+                      <Play size={20} className="mr-2" />
+                      Start Practice Session
+                    </>
+                  )}
+                </Button>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
 
         {/* History Tab */}
-        {activeTab === 'history' && (
-          <div className="space-y-4">
-            {loading ? (
+        <TabsContent value="history" className="mt-0">
+          {loading ? (
+            <div className="flex justify-center py-12">
               <Spinner size="lg" />
-            ) : sessions.length === 0 ? (
-              <div className="text-center py-12 text-slate-400">
-                <p className="text-lg">No practice sessions yet</p>
-              </div>
-            ) : (
-              sessions.map((session) => (
-                <div key={session._id} className="bg-gradient-to-r from-slate-800 to-slate-700 border border-slate-600 rounded-xl p-6 hover:border-slate-500 transition-all">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="text-xl font-bold text-white mb-2">
-                        {session.topic} ({session.mode})
-                      </h3>
-                      <div className="flex gap-4 text-sm text-slate-400">
-                        <span>Difficulty: <span className="text-slate-200 font-medium capitalize">{session.difficulty}</span></span>
-                        <span>Score: <span className="text-slate-200 font-medium">{Number(session.averageScore).toFixed(1)}/10</span></span>
-                        <span>Progress: <span className="text-slate-200 font-medium">{session.questionsAttempted}/{session.totalQuestions}</span></span>
-                      </div>
-                    </div>
-                    <div className={`px-4 py-2 rounded-lg font-semibold capitalize ${
-                      session.status === 'completed'
-                        ? 'bg-green-500/20 text-green-300'
-                        : 'bg-yellow-500/20 text-yellow-300'
-                    }`}>
-                      {session.status}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* Stats Tab */}
-        {activeTab === 'stats' && (
-          <div className="space-y-6">
-            {loading ? (
-              <Spinner size="lg" />
-            ) : stats ? (
-              <>
-                {/* Overview Stats */}
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                  <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-xl p-6">
-                    <div className="text-slate-400 text-sm font-medium mb-2">Total Sessions</div>
-                    <div className="text-3xl font-bold text-white">{stats.totalSessions}</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-xl p-6">
-                    <div className="text-slate-400 text-sm font-medium mb-2">Average Score</div>
-                    <div className="text-3xl font-bold text-white">{Number(stats.averageScore).toFixed(1)}</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-xl p-6">
-                    <div className="text-slate-400 text-sm font-medium mb-2">Best Score</div>
-                    <div className="text-3xl font-bold text-white">{Number(stats.bestPerformance).toFixed(1)}</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-xl p-6">
-                    <div className="text-slate-400 text-sm font-medium mb-2">Weakest Score</div>
-                    <div className="text-3xl font-bold text-white">{Number(stats.worstPerformance).toFixed(1)}</div>
-                  </div>
-                </div>
-
-                {/* Performance by Mode */}
-                {Object.keys(stats.sessionsByMode).length > 0 && (
-                  <div className="bg-gradient-to-br from-slate-800 to-slate-700 border border-slate-600 rounded-xl p-6">
-                    <h3 className="text-lg font-bold text-white mb-4">Performance by Mode</h3>
-                    <div className="space-y-3">
-                      {Object.entries(stats.sessionsByMode).map(([mode, data]: [string, any]) => (
-                        <div key={mode} className="flex justify-between items-center">
-                          <span className="text-slate-300 capitalize font-medium">{mode}</span>
-                          <div className="flex items-center gap-3">
-                            <div className="text-slate-400 text-sm">{data.count} sessions</div>
-                            <div className="w-32 bg-slate-700 rounded-full h-2">
-                              <div
-                                className="bg-blue-500 h-2 rounded-full"
-                                style={{ width: `${(data.avgScore / 10) * 100}%` }}
-                              />
-                            </div>
-                            <div className="text-slate-200 font-semibold w-12 text-right">{Number(data.avgScore).toFixed(1)}</div>
+            </div>
+          ) : sessions.length === 0 ? (
+            <Card className="border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl">
+              <CardContent className="py-16 text-center">
+                <History className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
+                <p className="text-lg font-medium text-muted-foreground">No practice sessions yet</p>
+                <p className="text-sm text-muted-foreground/70 mt-1">Start practicing to see your history</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {sessions.map((session) => (
+                <Card
+                  key={session._id}
+                  className="border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl hover:shadow-lg transition-all"
+                >
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className={cn(
+                          "p-3 rounded-xl",
+                          modes.find((m) => m.id === session.mode)?.bgGradient || "bg-zinc-100 dark:bg-zinc-800"
+                        )}>
+                          {(() => {
+                            const Icon = modes.find((m) => m.id === session.mode)?.icon || Brain;
+                            return <Icon className={cn("h-5 w-5", modes.find((m) => m.id === session.mode)?.iconColor || "text-zinc-500")} />;
+                          })()}
+                        </div>
+                        <div>
+                          <h3 className="font-heading font-bold text-lg">{session.topic}</h3>
+                          <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1 capitalize">
+                              <Target size={12} />
+                              {session.mode}
+                            </span>
+                            <span className="flex items-center gap-1 capitalize">
+                              <Zap size={12} />
+                              {session.difficulty}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <CheckCircle2 size={12} />
+                              {session.questionsAttempted}/{session.totalQuestions}
+                            </span>
                           </div>
                         </div>
-                      ))}
+                      </div>
+                      <div className="flex items-center gap-4">
+                        <div className="text-right">
+                          <p className="text-2xl font-heading font-bold">{Number(session.averageScore).toFixed(1)}</p>
+                          <p className="text-xs text-muted-foreground">out of 10</p>
+                        </div>
+                        <Badge
+                          variant={session.status === 'completed' ? 'default' : 'secondary'}
+                          className={cn(
+                            "capitalize",
+                            session.status === 'completed' && "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"
+                          )}
+                        >
+                          {session.status}
+                        </Badge>
+                        <Button
+                          onClick={() => navigate(`/candidate/practice-results/${session._id}`)}
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1 ml-auto"
+                        >
+                          View Details
+                          <ChevronRight className="w-4 h-4" />
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div className="text-center py-12 text-slate-400">
-                <p className="text-lg">No statistics available yet</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Stats Tab */}
+        <TabsContent value="stats" className="mt-0">
+          {loading ? (
+            <div className="flex justify-center py-12">
+              <Spinner size="lg" />
+            </div>
+          ) : stats ? (
+            <div className="space-y-6">
+              {/* Overview Stats */}
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6">
+                <Card className="border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl hover:shadow-lg transition-all">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Total Sessions</p>
+                      <div className="p-2 rounded-xl bg-violet-100 dark:bg-violet-900/30">
+                        <History className="h-4 w-4 text-violet-600 dark:text-violet-400" />
+                      </div>
+                    </div>
+                    <p className="text-4xl font-heading font-bold">{stats.totalSessions}</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl hover:shadow-lg transition-all">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Average Score</p>
+                      <div className="p-2 rounded-xl bg-blue-100 dark:bg-blue-900/30">
+                        <TrendingUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                      </div>
+                    </div>
+                    <p className="text-4xl font-heading font-bold">{Number(stats.averageScore).toFixed(1)}</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl hover:shadow-lg transition-all">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Best Score</p>
+                      <div className="p-2 rounded-xl bg-emerald-100 dark:bg-emerald-900/30">
+                        <Trophy className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+                      </div>
+                    </div>
+                    <p className="text-4xl font-heading font-bold text-emerald-600 dark:text-emerald-400">
+                      {Number(stats.bestPerformance).toFixed(1)}
+                    </p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl hover:shadow-lg transition-all">
+                  <CardContent className="p-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <p className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Needs Work</p>
+                      <div className="p-2 rounded-xl bg-amber-100 dark:bg-amber-900/30">
+                        <Target className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                      </div>
+                    </div>
+                    <p className="text-4xl font-heading font-bold text-amber-600 dark:text-amber-400">
+                      {Number(stats.worstPerformance).toFixed(1)}
+                    </p>
+                  </CardContent>
+                </Card>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+
+              {/* Performance by Mode */}
+              {Object.keys(stats.sessionsByMode || {}).length > 0 && (
+                <Card className="border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl">
+                  <CardHeader>
+                    <CardTitle className="font-heading font-bold flex items-center gap-2">
+                      <BarChart3 size={20} />
+                      Performance by Mode
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {Object.entries(stats.sessionsByMode).map(([mode, data]: [string, any]) => {
+                      const modeData = modes.find((m) => m.id === mode);
+                      return (
+                        <div key={mode} className="space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              {modeData && (
+                                <div className={cn("p-2 rounded-lg", modeData.bgGradient)}>
+                                  <modeData.icon className={cn("h-4 w-4", modeData.iconColor)} />
+                                </div>
+                              )}
+                              <span className="font-medium capitalize">{mode}</span>
+                            </div>
+                            <div className="flex items-center gap-4 text-sm">
+                              <span className="text-muted-foreground">{data.count} sessions</span>
+                              <span className="font-bold">{Number(data.avgScore).toFixed(1)}/10</span>
+                            </div>
+                          </div>
+                          <Progress value={(data.avgScore / 10) * 100} className="h-2" />
+                        </div>
+                      );
+                    })}
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          ) : (
+            <Card className="border-zinc-200 dark:border-zinc-800 bg-white/80 dark:bg-zinc-950/80 backdrop-blur-xl">
+              <CardContent className="py-16 text-center">
+                <BarChart3 className="h-12 w-12 mx-auto mb-4 text-muted-foreground/30" />
+                <p className="text-lg font-medium text-muted-foreground">No statistics available</p>
+                <p className="text-sm text-muted-foreground/70 mt-1">Complete some practice sessions first</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

@@ -23,6 +23,7 @@ app.use('/api/resume', require('./routes/resume'));
 app.use('/api/interview', require('./routes/interview'));
 app.use('/api/practice', require('./routes/practice'));
 app.use('/api/analytics', require('./routes/analytics'));
+app.use('/api/code', require('./routes/code')); // Local Judge0 code execution
 
 // Health check
 app.get('/api/health', (req, res) => {

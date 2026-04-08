@@ -23,7 +23,15 @@ const practiceSessionSchema = new mongoose.Schema(
     },
     questions: [
       {
+        type: {
+          type: String,
+          enum: ['mcq', 'theoretical', 'coding'],
+          default: 'theoretical'
+        },
         question: String,
+        options: [String],
+        correctAnswer: String,
+        explanation: String,
         difficulty: String,
         topic: String,
         domain: String,
@@ -81,6 +89,28 @@ const practiceSessionSchema = new mongoose.Schema(
       default: 0,
     },
     skillsImproved: [String],
+    evaluationSummary: {
+      score: Number,
+      summary: String,
+      strengths: [String],
+      weaknesses: [String],
+      mistakes: [
+        {
+          question: String,
+          userAnswer: String,
+          issue: String,
+          correctConcept: String,
+          improvement: String,
+        },
+      ],
+      perQuestionScore: [
+        {
+          questionId: Number,
+          score: Number,
+          feedback: String,
+        },
+      ],
+    },
     timeSpent: {
       type: Number,
       default: 0, // in seconds

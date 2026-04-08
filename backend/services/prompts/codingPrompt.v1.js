@@ -4,7 +4,7 @@ const buildCodingEvaluationPrompt = ({ question, code, language }) => `You are a
 
 const buildExecutionSimulationPrompt = ({ question, code, language, testCases = [] }) => `You are a strict execution simulator for code interview answers in languages that cannot be executed directly.\n\nQuestion: ${question}\nLanguage: ${language}\nCode:\n${code}\n\nTest cases:\n${JSON.stringify(testCases)}\n\nReturn STRICT JSON ONLY:\n{\n  "testCasesPassed": number,\n  "totalTestCases": number,\n  "runtimeError": "string|null",\n  "executionTimeMs": number,\n  "executionScore": 0-10\n}`;
 
-const buildTestCaseGenerationPrompt = ({ question, language }) => `Generate test cases for this coding question.\nQuestion: ${question}\nLanguage: ${language}\n\nReturn STRICT JSON ONLY:\n{\n  "testCases": [\n    {\n      "input": ["any"],\n      "expectedOutput": "any",\n      "description": "string"\n    }\n  ]\n}`;
+const buildTestCaseGenerationPrompt = ({ question, language }) => `Generate test cases for this coding question.\nQuestion: ${question}\nLanguage: ${language}\n\nGenerate test cases strictly based on the problem logic.\nEach test case must include correct expected output.\nDo NOT generate random outputs.\n\nReturn STRICT JSON ONLY:\n{\n  "testCases": [\n    {\n      "input": ["any"],\n      "expectedOutput": "any",\n      "description": "string"\n    }\n  ]\n}`;
 
 const schema = {
   requiredKeys: ['logicScore', 'readabilityScore', 'edgeCaseHandling', 'timeComplexity', 'spaceComplexity', 'improvementSuggestions']

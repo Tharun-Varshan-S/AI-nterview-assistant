@@ -12,6 +12,7 @@ import RecruiterDashboard from './pages/RecruiterDashboard';
 import CandidateDetailView from './pages/CandidateDetailView';
 import PracticePage from './pages/PracticePage';
 import PracticeSessionPage from './pages/PracticeSessionPage';
+import PracticeResultsDetail from './components/PracticeResultsDetail';
 import MockSetupPage from './pages/MockSetupPage';
 import AnalyticsPage from './pages/AnalyticsPage';
 
@@ -45,6 +46,7 @@ function App() {
               <Route path="dashboard" element={<CandidateDashboard />} />
               <Route path="practice" element={<PracticePage />} />
               <Route path="practice/:sessionId" element={<PracticeSessionPage />} />
+              <Route path="practice-results/:sessionId" element={<PracticeResultsDetail />} />
               <Route path="mock/setup" element={<MockSetupPage />} />
               <Route path="analytics" element={<AnalyticsPage />} />
               <Route path="interview/:id" element={<InterviewSession />} />

@@ -50,6 +50,128 @@ const calculateBehaviorMetrics = (answers = []) => {
   };
 };
 
+const getProvisionalScore = ({ response = '', isCodingAnswer = false, executionResult = null }) => {
+  if (isCodingAnswer && executionResult) {
+    return Number(executionResult.executionScore || 5);
+  }
+
+  const length = String(response || '').trim().length;
+  if (length === 0) return 2;
+  if (length < 40) return 4;
+  if (length < 120) return 6;
+  if (length < 260) return 7;
+  return 8;
+};
+
+const buildPendingEvaluation = (isCodingAnswer) => {
+  if (isCodingAnswer) {
+    return {
+      pending: true,
+      logicScore: 0,
+      readabilityScore: 0,
+      edgeCaseHandling: 'Pending final evaluation',
+      timeComplexity: 'Pending final evaluation',
+      spaceComplexity: 'Pending final evaluation',
+      improvementSuggestions: ['Submit all answers to unlock full coding evaluation'],
+      finalCodingScore: 0,
+      promptVersion: 'deferred.v1'
+    };
+  }
+
+  return {
+    pending: true,
+    score: 0,
+    technicalAccuracy: 'Pending final evaluation',
+    clarity: 'Pending final evaluation',
+    depth: 'Pending final evaluation',
+    strengths: [],
+    weaknesses: [],
+    improvements: ['Submit all answers to unlock full evaluation'],
+    issue: 'Final evaluation is triggered only after all questions are answered.',
+    correctConcept: 'Complete the interview to receive concept-wise corrections.',
+    promptVersion: 'deferred.v1'
+  };
+};
+
+const evaluateAllAnswersAfterCompletion = async (interview) => {
+  const mistakes = [];
+  const perQuestionScore = [];
+
+  for (const answer of interview.answers) {
+    const questionMeta = interview.questions?.[answer.questionIndex] || {};
+    let evaluated;
+
+    if (answer.isCodingAnswer) {
+      evaluated = await geminiService.evaluateCodeSubmission(
+        answer.question,
+        answer.response,
+        answer.language || 'javascript'
+      );
+
+      const finalCodingScore = Number(
+        evaluated?.finalCodingScore ||
+        CodingEvaluationEngine.calculateOverallCodingScore(
+          evaluated?.logicScore || 5,
+          evaluated?.readabilityScore || 5,
+          CodingEvaluationEngine.scoreEdgeCaseHandling(evaluated?.edgeCaseHandling || 'Partially handled')
+        )
+      );
+
+      evaluated = {
+        ...evaluated,
+        finalCodingScore,
+        pending: false,
+      };
+
+      const feedback = Array.isArray(evaluated?.improvementSuggestions)
+        ? evaluated.improvementSuggestions.join(' ')
+        : (evaluated?.edgeCaseHandling || 'Improve edge-case handling and complexity analysis.');
+
+      perQuestionScore.push({
+        questionId: Number(answer.questionIndex) + 1,
+        score: finalCodingScore,
+        feedback,
+      });
+
+      mistakes.push({
+        question: answer.question,
+        userAnswer: answer.response,
+        issue: 'Code quality gaps detected by evaluator.',
+        correctConcept: `Target complexity: ${evaluated?.timeComplexity || 'N/A'} time, ${evaluated?.spaceComplexity || 'N/A'} space.`,
+        improvement: feedback,
+      });
+    } else {
+      evaluated = await geminiService.evaluateAnswer(answer.question, answer.response);
+      evaluated = { ...evaluated, pending: false };
+
+      const score = Number(evaluated?.score || 0);
+      const feedback = Array.isArray(evaluated?.improvements) && evaluated.improvements.length > 0
+        ? evaluated.improvements[0]
+        : 'Provide clearer explanation with concrete technical examples.';
+
+      perQuestionScore.push({
+        questionId: Number(answer.questionIndex) + 1,
+        score,
+        feedback,
+      });
+
+      mistakes.push({
+        question: answer.question,
+        userAnswer: answer.response,
+        issue: evaluated?.issue || (Array.isArray(evaluated?.weaknesses) ? evaluated.weaknesses[0] : 'Conceptual gap identified.'),
+        correctConcept: evaluated?.correctConcept || 'Review core concept and provide structured reasoning with examples.',
+        improvement: feedback,
+      });
+    }
+
+    answer.aiEvaluation = evaluated;
+    answer.promptVersion = evaluated?.promptVersion || answer.promptVersion;
+    answer.evaluationTimestamp = new Date();
+  }
+
+  return { mistakes, perQuestionScore };
+};
+
 const enforceInterviewTypeComposition = ({ questions = [], interviewType = 'theoretical' }) => {
   const normalizedQuestions = Array.isArray(questions) ? questions : [];
 
@@ -204,14 +326,12 @@ exports.submitAnswer = async (req, res, next) => {
       return res.status(access.status).json({ success: false, message: access.message });
     }
 
-    let evaluation;
+    const evaluation = buildPendingEvaluation(Boolean(isCodingAnswer));
     let executionResult = null;
 
     const questionMetadata = interview.questions[questionIndex] || {};
 
     if (isCodingAnswer && language) {
-      evaluation = await geminiService.evaluateCodeSubmission(question, response, language);
-
       const providedCases = Array.isArray(questionMetadata.testCases) ? questionMetadata.testCases : [];
       const generatedCases = providedCases.length === 0
         ? await geminiService.generateExecutionTestCases(question, language)
@@ -226,30 +346,13 @@ exports.submitAnswer = async (req, res, next) => {
         geminiService
       });
 
-      const logic = Number(evaluation?.logicScore || 5);
-      const readability = Number(evaluation?.readabilityScore || 5);
-      const execution = Number(executionResult?.executionScore || 0);
-
-      evaluation = {
-        ...evaluation,
-        executionScore: execution,
-        finalCodingScore: Math.round(logic * 0.6 + readability * 0.2 + execution * 0.2)
-      };
-    } else {
-      evaluation = await geminiService.evaluateAnswer(question, response);
     }
 
     const priorSameQuestionScores = (interview.answers || [])
       .filter((a) => a.questionIndex === questionIndex)
       .map((a) => Number(a.aiEvaluation?.score || a.aiEvaluation?.finalCodingScore || 0));
 
-    const currentScore = isCodingAnswer
-      ? Number(evaluation?.finalCodingScore || CodingEvaluationEngine.calculateOverallCodingScore(
-        evaluation?.logicScore,
-        evaluation?.readabilityScore,
-        CodingEvaluationEngine.scoreEdgeCaseHandling(evaluation?.edgeCaseHandling)
-      ))
-      : Number(evaluation?.score || 0);
+    const currentScore = getProvisionalScore({ response, isCodingAnswer, executionResult });
 
     const reliability = EvaluationReliabilityEngine.calculateEvaluationReliability({
       response,
@@ -277,7 +380,11 @@ exports.submitAnswer = async (req, res, next) => {
         editCount: Number(interactionMetrics.editCount || 0),
         autoSubmitted: Boolean(interactionMetrics.autoSubmitted)
       },
-      aiEvaluation: evaluation,
+      aiEvaluation: {
+        ...evaluation,
+        score: Number(currentScore || 0),
+        finalCodingScore: isCodingAnswer ? Number(currentScore || 0) : evaluation.finalCodingScore
+      },
       submittedAt: new Date()
     };
 
@@ -316,6 +423,8 @@ exports.submitAnswer = async (req, res, next) => {
 
     if (interview.answers.length === interview.questions.length) {
       interview.status = 'completed';
+
+      const { mistakes, perQuestionScore } = await evaluateAllAnswersAfterCompletion(interview);
 
       const theoreticalAnswers = interview.answers.filter((a) => !a.isCodingAnswer);
       const codingAnswers = interview.answers.filter((a) => a.isCodingAnswer);
@@ -356,6 +465,9 @@ exports.submitAnswer = async (req, res, next) => {
 
       interview.finalEvaluation = {
         overallScore: interview.averageScore,
+        summary: interview.averageScore >= 7
+          ? 'Strong performance with good interview readiness.'
+          : 'Foundational performance with clear areas to improve.',
         strengths: interview.answers
           .filter((a) => a.aiEvaluation?.strengths?.length > 0)
           .slice(0, 3)
@@ -371,6 +483,8 @@ exports.submitAnswer = async (req, res, next) => {
           .slice(0, 2)
           .flatMap((a) => a.aiEvaluation.improvements || [])
           .slice(0, 5),
+        mistakes,
+        perQuestionScore,
         resumeConsistency,
         skillTrajectory: trajectory,
         evaluatedAt: new Date()

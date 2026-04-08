@@ -50,6 +50,15 @@ exports.uploadResume = async (req, res, next) => {
       });
     }
 
+    // 6. Resume-likelihood check to reject generic documents that happen to contain a few keywords
+    const structureCheck = resumeValidationService.detectResumeLikelihood(text);
+    if (!structureCheck.isLikelyResume) {
+      return res.status(400).json({
+        success: false,
+        message: 'Uploaded document does not look like a resume. Please upload a proper resume with profile, skills, education, and experience sections.'
+      });
+    }
+
     // --- STAGE 2: AI VALIDATION + EXTRACTION ---
 
     let structuredData = null;
@@ -58,9 +67,16 @@ exports.uploadResume = async (req, res, next) => {
     try {
       // Try AI validation first
       structuredData = await geminiService.validateAndExtractResume(text);
-      aiValidated = !!structuredData?.isResume;
+      aiValidated = !!structuredData?.isResume && Number(structuredData?.confidence || 0) >= 55;
     } catch (error) {
       logger.warn('AI Resume Validation failed, extracting metadata locally', { error: error.message });
+    }
+
+    if (structuredData && structuredData.isResume === false) {
+      return res.status(400).json({
+        success: false,
+        message: 'The uploaded file was classified as non-resume content. Please upload a valid resume document.'
+      });
     }
 
     // Fallback: Extract structured data locally if AI failed
@@ -76,7 +92,7 @@ exports.uploadResume = async (req, res, next) => {
       extractedText: text,
       structuredData: structuredData || null,
       aiValidated: aiValidated,
-      aiConfidence: structuredData?.confidence || 0
+      aiConfidence: structuredData?.confidence || Math.round((structureCheck.score || 0) * 100)
     };
 
     // Update or Create

@@ -2,6 +2,7 @@ const resumePrompt = require('./resumePrompt.v1');
 const questionPrompt = require('./questionPrompt.v1');
 const evaluationPrompt = require('./evaluationPrompt.v1');
 const codingPrompt = require('./codingPrompt.v1');
+const topicCodingPrompt = require('./topicCodingPrompt.v1');
 
 const ensureRequiredKeys = (obj, requiredKeys = []) => {
   if (!obj || typeof obj !== 'object') return false;
@@ -20,6 +21,7 @@ module.exports = {
   questionPrompt,
   evaluationPrompt,
   codingPrompt,
+  topicCodingPrompt,
   ensureRequiredKeys,
   buildPromptPayload
 };

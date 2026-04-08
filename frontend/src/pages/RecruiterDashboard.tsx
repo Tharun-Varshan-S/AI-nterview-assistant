@@ -158,7 +158,7 @@ export default function RecruiterDashboard() {
         </Card>
 
         <Card className="border-zinc-200 dark:border-zinc-800 shadow-lg bg-zinc-950 text-white overflow-hidden relative">
-          <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] pointer-events-none" />
+          <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml,%3Csvg viewBox=%270 0 400 400%27 xmlns=%27http://www.w3.org/2000/svg%27%3E%3Cfilter id=%27noiseFilter%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.65%27 numOctaves=%273%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23noiseFilter)%27/%3E%3C/svg%3E')] pointer-events-none" />
           <CardHeader className="relative z-10 border-b border-zinc-900 pb-4">
             <CardTitle className="text-xs font-bold uppercase tracking-widest text-zinc-400">Signal Intelligence</CardTitle>
           </CardHeader>

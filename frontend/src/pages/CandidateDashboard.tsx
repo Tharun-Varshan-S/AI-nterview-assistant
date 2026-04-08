@@ -317,7 +317,7 @@ export default function CandidateDashboard() {
         </Card>
 
         <Card className="lg:col-span-2 rounded-3xl bg-zinc-950 shadow-2xl flex flex-col justify-between overflow-hidden relative group">
-          <div className="absolute inset-0 opacity-10 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] pointer-events-none" />
+          <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml,%3Csvg viewBox=%270 0 400 400%27 xmlns=%27http://www.w3.org/2000/svg%27%3E%3Cfilter id=%27noiseFilter%27%3E%3CfeTurbulence type=%27fractalNoise%27 baseFrequency=%270.65%27 numOctaves=%273%27 stitchTiles=%27stitch%27/%3E%3C/filter%3E%3Crect width=%27100%25%27 height=%27100%25%27 filter=%27url(%23noiseFilter)%27/%3E%3C/svg%3E')] pointer-events-none" />
           <div className="absolute -right-20 -top-20 w-64 h-64 bg-zinc-100/5 rounded-full blur-3xl pointer-events-none group-hover:bg-zinc-100/10 transition-colors duration-1000" />
 
           <div className="relative z-10 p-10 space-y-6">
