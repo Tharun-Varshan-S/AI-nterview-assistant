@@ -11,26 +11,32 @@ const judge0Service = require('../services/judge0Service');
 const router = express.Router();
 const USE_MOCK = process.env.USE_MOCK === 'true' || false;
 
-const normalizeTestCase = (testCase = {}) => ({
-  input: String(testCase.input ?? '').trim(),
-  output: String(testCase.output ?? testCase.expected ?? testCase.expectedOutput ?? '').trim()
-});
+const normalizeTestCase = (testCase = {}) => {
+  const input = testCase.input !== undefined ? testCase.input : '';
+  const expected_output = testCase.expected_output ?? testCase.expectedOutput ?? testCase.output ?? testCase.expected ?? '';
+  
+  return {
+    input: typeof input === 'object' ? JSON.stringify(input) : String(input).trim(),
+    expected_output: typeof expected_output === 'object' ? JSON.stringify(expected_output) : String(expected_output).trim()
+  };
+};
 
 function validateTestCases(question) {
   if (!question || !Array.isArray(question.test_cases) || question.test_cases.length === 0) return false;
 
-  return question.test_cases.every((tc) =>
-    typeof tc.input === 'string' &&
-    typeof tc.output === 'string' &&
-    tc.input.trim() !== '' &&
-    tc.output.trim() !== ''
-  );
+  return question.test_cases.every((tc, index) => {
+    // Check for existence of input and expected_output
+    const hasInput = tc.input !== undefined && tc.input !== null;
+    const hasOutput = tc.expected_output !== undefined && tc.expected_output !== null;
+    
+    if (!hasInput || !hasOutput) {
+      console.log('INVALID TEST CASE (Missing Field):', index, tc);
+      return false;
+    }
+    
+    return true;
+  });
 }
-
-const buildStdin = (testCases) => [
-  testCases.length,
-  ...testCases.map((tc) => tc.input)
-].join('\n');
 
 const splitOutputBlocks = (stdout, testCasesLength) => {
   const lines = String(stdout || '')
@@ -46,17 +52,30 @@ const splitOutputBlocks = (stdout, testCasesLength) => {
     return lines.map((line) => line.trim());
   }
 
+  // If there's extra lines, try to find "===RESULT===" blocks
+  const resultBlocks = String(stdout || '').split("===RESULT===").slice(1).map(s => s.trim());
+  if (resultBlocks.length >= testCasesLength) {
+    return resultBlocks;
+  }
+
   return lines.slice(0, testCasesLength).map((line) => line.trim());
 };
 
 const buildEvaluationResponse = ({ testCases, stdout, mode }) => {
   const outputLines = splitOutputBlocks(stdout, testCases.length);
-  const results = testCases.map((tc, index) => ({
-    input: tc.input,
-    expected: tc.output,
-    actual: outputLines[index] || '',
-    passed: tc.output.trim() === String(outputLines[index] || '').trim()
-  }));
+  const results = testCases.map((tc, index) => {
+    const expected = String(tc.expected_output || tc.expected || '').trim();
+    const actual = String(outputLines[index] || '').trim();
+    
+    return {
+      input: tc.input,
+      expected: expected,
+      expected_output: expected,
+      actual: actual,
+      actual_output: actual,
+      passed: expected === actual
+    };
+  });
   const passedCount = results.filter((result) => result.passed).length;
 
   return {
@@ -219,14 +238,8 @@ router.post('/evaluate', async (req, res) => {
       });
     }
 
-    const stdin = buildStdin(selectedCases);
-    console.log('TEST CASES:', selectedCases);
-    console.log('STDIN:', stdin);
-
     if (USE_MOCK) {
-      const mockStdout = selectedCases.map((testCase) => testCase.output).join('\n');
-      console.log('STDOUT:', mockStdout);
-
+      const mockStdout = selectedCases.map((testCase) => testCase.expected).join('\n');
       return res.status(200).json({
         success: true,
         ...buildEvaluationResponse({ testCases: selectedCases, stdout: mockStdout, mode }),
@@ -234,23 +247,47 @@ router.post('/evaluate', async (req, res) => {
       });
     }
 
-    const result = await judge0Service.submitCode({
-      source_code,
-      language_id: parseInt(language_id, 10),
-      stdin
+    // Execute using executeBatch for proper test case isolation and formatting
+    const langId = parseInt(language_id, 10);
+    const batchResult = await judge0Service.executeBatch(source_code, langId, selectedCases);
+
+    if (batchResult.error && (!batchResult.results || batchResult.results.length === 0)) {
+       return res.status(200).json({
+         success: false,
+         error: batchResult.error,
+         errorType: 'compile',
+         rawOutput: batchResult.output || ''
+       });
+    }
+    
+    // Map back into response object expected by frontend with redundancy
+    const results = batchResult.results.map(r => {
+      const expected = r.expected || r.expected_output || '';
+      const actual = r.actual || r.actual_output || '';
+      
+      return {
+        input: r.input,
+        expected: expected,
+        expected_output: expected,
+        expectedOutput: expected,
+        actual: actual,
+        actual_output: actual,
+        actualOutput: actual,
+        passed: r.passed,
+        status: r.status,
+        stderr: r.stderr,
+        compile_output: r.compile_output
+      };
     });
 
-    if (!result.success) {
-      return res.status(result.errorType === 'service_unavailable' ? 503 : 200).json(result);
-    }
-
-    console.log('STDOUT:', result.output || '');
-
+    const passedCount = results.filter(r => r.passed).length;
+    
     return res.status(200).json({
       success: true,
-      ...buildEvaluationResponse({ testCases: selectedCases, stdout: result.output || '', mode }),
-      time: result.time,
-      memory: result.memory
+      total: results.length,
+      passed: passedCount,
+      failed: results.length - passedCount,
+      results
     });
   } catch (error) {
     console.error('[Code Route] Evaluation error:', error);

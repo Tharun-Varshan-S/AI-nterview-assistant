@@ -10,7 +10,7 @@ export type { Language } from "./constants/languages";
 export { getBoilerplate, getSimpleBoilerplate, BOILERPLATES, SIMPLE_BOILERPLATES } from "./constants/boilerplates";
 
 // Services
-export { executeCode, runTestCases, submitSolution, combineTestCasesInput, parseBatchedOutput } from "./services/judge0";
+export { executeCode, runTestCases, submitSolution } from "./services/judge0";
 
 // Types
 export type {

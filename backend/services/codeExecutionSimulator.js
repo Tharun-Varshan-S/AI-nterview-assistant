@@ -85,12 +85,16 @@ class CodeExecutionSimulator {
           const args = Array.isArray(testCase.input) ? testCase.input : [testCase.input];
           const actual = solveFn(...args);
 
-          const passed = JSON.stringify(actual) === JSON.stringify(testCase.expectedOutput ?? null);
+          const expectedValue = String(testCase.expectedOutput ?? testCase.output ?? testCase.expected ?? '');
+          const actualValue = String(actual ?? '');
+          const passed = actualValue === expectedValue;
 
           perCaseResults.push({
             input: JSON.stringify(testCase.input),
-            expected: JSON.stringify(testCase.expectedOutput),
-            actual: JSON.stringify(actual),
+            expected: expectedValue,
+            expected_output: expectedValue,
+            actual: actualValue,
+            actual_output: actualValue,
             passed,
             description: testCase.description || '',
           });
@@ -169,11 +173,16 @@ Respond with a JSON object exactly in this format:
       const totalCases = Number(response?.totalTestCases || testCases.length || 0);
       const passedCases = Number(response?.testCasesPassed || 0);
       const simulatedResults = testCases.map((tc, index) => {
+        const expectedValue = String(tc.expectedOutput ?? tc.output ?? tc.expected ?? '');
         const passed = index < passedCases;
+        const actualValue = passed ? expectedValue : 'Mismatch';
+
         return {
           input: JSON.stringify(tc.input),
-          expected: JSON.stringify(tc.expectedOutput),
-          actual: passed ? JSON.stringify(tc.expectedOutput) : 'Mismatch',
+          expected: expectedValue,
+          expected_output: expectedValue,
+          actual: actualValue,
+          actual_output: actualValue,
           passed,
           description: tc.description || `Test case ${index + 1}`
         };
@@ -211,11 +220,19 @@ Respond with a JSON object exactly in this format:
     
     try {
         const batchResult = await judge0Service.executeBatch(code, languageId, testCases);
+        const total = testCases.length;
+        const passed = batchResult.results.filter(r => r.passed).length;
+        const score = total > 0 ? Math.round((passed / total) * 10) : 0;
+
         return {
             passed: batchResult.passed,
             results: batchResult.results,
             error: batchResult.error,
             output: batchResult.output,
+            testCasesPassed: passed,
+            totalTestCases: total,
+            executionTimeMs: Number(batchResult.time || 0) * 1000,
+            executionScore: batchResult.error ? Math.min(score, 3) : score,
             // also provide testResults, runtimeError for legacy shape compatibility
             testResults: batchResult.results,
             runtimeError: batchResult.error

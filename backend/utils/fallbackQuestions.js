@@ -388,11 +388,16 @@ function normalizeFallbackCodingQuestion(rawQuestion, topic = DEFAULT_TOPIC, dif
     outputFormat: safeQuestion.output_format,
     constraints: normalizeConstraintList(safeQuestion.constraints),
     examples: (visibleCases && visibleCases.length > 0)
-      ? visibleCases.slice(0, Math.min(2, visibleCases.length)).map((testCase) => ({
-          input: String(testCase.input ?? ""),
-          output: String(testCase.output ?? ""),
-          explanation: "Deterministic fallback example"
-        }))
+      ? visibleCases.slice(0, Math.min(2, visibleCases.length)).map((testCase) => {
+          const out = String(testCase.output ?? "");
+          return {
+            input: String(testCase.input ?? ""),
+            output: out,
+            expected: out,
+            expected_output: out,
+            explanation: "Deterministic fallback example"
+          };
+        })
       : [
           { input: "Example 1", output: "Output 1", explanation: "" },
           { input: "Example 2", output: "Output 2", explanation: "" }
@@ -409,12 +414,18 @@ function normalizeFallbackCodingQuestion(rawQuestion, topic = DEFAULT_TOPIC, dif
           { input: "0", output: "0", isHidden: true }
         ],
     testCases: (visibleCases && visibleCases.length > 0)
-      ? visibleCases.map((testCase, index) => ({
-          input: String(testCase.input ?? ""),
-          expected: String(testCase.output ?? ""),
-          isHidden: index >= 2,
-          description: index < 2 ? "Visible fallback test case" : "Hidden fallback test case"
-        }))
+      ? visibleCases.map((testCase, index) => {
+          const out = String(testCase.output ?? "");
+          return {
+            input: String(testCase.input ?? ""),
+            expected: out,
+            expected_output: out,
+            expectedOutput: out,
+            output: out,
+            isHidden: index >= 2,
+            description: index < 2 ? "Visible fallback test case" : "Hidden fallback test case"
+          };
+        })
       : [
           { input: "1", expected: "1", isHidden: false, description: "Visible fallback test case" },
           { input: "2", expected: "2", isHidden: false, description: "Visible fallback test case" },
@@ -423,12 +434,18 @@ function normalizeFallbackCodingQuestion(rawQuestion, topic = DEFAULT_TOPIC, dif
     hiddenTestCases: (visibleCases && visibleCases.length > 0)
       ? visibleCases
           .filter((_, index) => index >= 2)
-          .map((testCase) => ({
-            input: String(testCase.input ?? ""),
-            expected: String(testCase.output ?? ""),
-            isHidden: true,
-            description: "Hidden fallback test case"
-          }))
+          .map((testCase) => {
+            const out = String(testCase.output ?? "");
+            return {
+              input: String(testCase.input ?? ""),
+              expected: out,
+              expected_output: out,
+              expectedOutput: out,
+              output: out,
+              isHidden: true,
+              description: "Hidden fallback test case"
+            };
+          })
       : [
           { input: "0", expected: "0", isHidden: true, description: "Hidden fallback test case" }
         ],

@@ -57,10 +57,10 @@ export default function PracticeSessionPage() {
     // Get all test cases (both visible and hidden)
     const allTestCases = Array.isArray(q.testCases)
       ? q.testCases.map((tc: any) => ({
-          input: tc.input || '',
-          expected: tc.expected || tc.expectedOutput || '',
-          isHidden: tc.isHidden || false,
-          description: tc.description || ''
+          input: tc.input ?? '',
+          expected: tc.expected ?? tc.expectedOutput ?? tc.expected_output ?? tc.output ?? '',
+          isHidden: tc.isHidden ?? false,
+          description: tc.description ?? ''
         }))
       : [];
 
@@ -71,9 +71,9 @@ export default function PracticeSessionPage() {
     let examples = [];
     if (Array.isArray(q.examples) && q.examples.length > 0) {
       examples = q.examples.map((ex: any) => ({
-        input: ex.input || '',
-        output: ex.output || ex.expected || '',
-        explanation: ex.explanation || ''
+        input: ex.input ?? '',
+        output: ex.output ?? ex.expected ?? ex.expected_output ?? ex.expectedOutput ?? '',
+        explanation: ex.explanation ?? ''
       }));
     } else if (testCases.length > 0) {
       // Use first 2 visible test cases as examples if no examples provided
@@ -103,15 +103,15 @@ export default function PracticeSessionPage() {
       testCases,
       hiddenTestCases: allTestCases.filter((tc: any) => tc.isHidden).length > 0
         ? allTestCases.filter((tc: any) => tc.isHidden).map((tc: any) => ({
-            input: tc.input || '',
-            expected: tc.expected || '',
+            input: tc.input ?? '',
+            expected: tc.expected ?? tc.expectedOutput ?? '',
             isHidden: true,
-            description: tc.description || ''
+            description: tc.description ?? ''
           }))
         : (Array.isArray(q.hiddenTestCases) && q.hiddenTestCases.length > 0
           ? q.hiddenTestCases.map((tc: any) => ({
-              input: tc.input || '',
-              expected: tc.expected || '',
+              input: tc.input ?? '',
+              expected: tc.expected ?? tc.expectedOutput ?? '',
               isHidden: true
             }))
           : []),

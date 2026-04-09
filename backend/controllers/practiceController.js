@@ -154,13 +154,45 @@ const buildPracticeQuestions = async ({ mode, topic, difficulty, questionCount }
           isCoding: true,
           // Ensure test cases have the right structure for execution
           testCases: Array.isArray(q.testCases)
-            ? q.testCases.filter((tc) => !tc.isHidden).map((tc) => ({
+            ? q.testCases.map((tc) => {
+                const expected = tc.expected ?? tc.output ?? tc.expected_output ?? tc.expectedOutput ?? '';
+                return {
+                  input: tc.input,
+                  expected: expected,
+                  output: expected,
+                  expected_output: expected,
+                  expectedOutput: expected,
+                  isHidden: tc.isHidden || false,
+                  description: tc.description || (tc.isHidden ? 'Hidden test case' : 'Visible test case')
+                };
+              })
+            : (Array.isArray(q.test_cases) 
+               ? q.test_cases.map(tc => {
+                  const expected = tc.output ?? tc.expected ?? '';
+                  return {
+                    input: tc.input,
+                    expected: expected,
+                    output: expected,
+                    expected_output: expected,
+                    isHidden: tc.isHidden || false
+                  };
+               })
+               : defaultTestCases),
+          examples: Array.isArray(q.examples)
+            ? q.examples.map(ex => {
+                const out = ex.output ?? ex.expected ?? '';
+                return {
+                  input: ex.input,
+                  output: out,
+                  expected: out,
+                  explanation: ex.explanation || ''
+                };
+              })
+            : (Array.isArray(q.testCases) ? q.testCases.slice(0, 2).map(tc => ({
                 input: tc.input,
-                expected: tc.expected,
-                description: tc.description || 'Test case'
-              }))
-            : defaultTestCases,
-          hiddenTestCases: Array.isArray(q.hiddenTestCases) ? q.hiddenTestCases : []
+                output: tc.expected ?? tc.output ?? '',
+                explanation: tc.description || ''
+              })) : [])
         }));
       }
     }
@@ -483,9 +515,42 @@ exports.getPracticeSessionDetails = asyncHandler(async (req, res, next) => {
     return next(new AppError('Unauthorized', 403));
   }
 
+  const sessionObj = session.toObject();
+  
+  // Dynamically normalize questions to ensure redundant field mapping
+  if (Array.isArray(sessionObj.questions)) {
+    sessionObj.questions = sessionObj.questions.map(q => {
+      if (q.isCoding || q.type === 'coding') {
+        const testCases = (Array.isArray(q.testCases) ? q.testCases : (Array.isArray(q.test_cases) ? q.test_cases : [])).map(tc => {
+          const expected = tc.expected ?? tc.output ?? tc.expected_output ?? tc.expectedOutput ?? '';
+          return {
+            ...tc,
+            expected,
+            output: expected,
+            expected_output: expected,
+            expectedOutput: expected
+          };
+        });
+
+        const examples = (Array.isArray(q.examples) ? q.examples : (testCases.length > 0 ? testCases.slice(0, 2) : [])).map(ex => {
+          const out = ex.output ?? ex.expected ?? ex.expected_output ?? '';
+          return {
+            ...ex,
+            output: out,
+            expected: out,
+            expected_output: out
+          };
+        });
+
+        return { ...q, testCases, examples };
+      }
+      return q;
+    });
+  }
+
   res.json({
     success: true,
-    data: session,
+    data: sessionObj,
   });
 });
 

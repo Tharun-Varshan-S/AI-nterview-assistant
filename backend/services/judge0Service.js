@@ -361,165 +361,103 @@ async function executeBatch(sourceCode, languageId, testCases = []) {
     return { passed: true, results: [], error: null, output: '' };
   }
 
-  const DELIMITER = "___TEST_CASE_DELIMITER___";
-  const stdin = testCases.map(tc => {
-    return typeof tc.input === 'object' ? JSON.stringify(tc.input) : String(tc.input);
-  }).join(`\n${DELIMITER}\n`);
+  try {
+    console.log(`[Judge0] executeBatch: Sending ${testCases.length} test cases in parallel...`);
 
-  let wrappedCode = sourceCode;
+    // 1. Map each test case to an individual submission promise
+    const executionPromises = testCases.map(async (tc, idx) => {
+      const stdin = (tc.input !== undefined && tc.input !== null)
+        ? (typeof tc.input === 'object' ? JSON.stringify(tc.input) : String(tc.input))
+        : "";
 
-  // Wrap JavaScript
-  if (languageId === 63 || languageId === 74) {
-    wrappedCode = `
-${sourceCode}
+      // Capture all possible field names for the expected output
+      const expected = String(tc.expected_output ?? tc.expectedOutput ?? tc.expected ?? "").trim();
 
-const fs = require('fs');
-const DELIMITER = "${DELIMITER}";
-try {
-  const allInput = fs.readFileSync(0, 'utf-8').trim();
-  if (!allInput) process.exit(0);
-
-  const cases = allInput.split(DELIMITER).map(s => s.trim());
-  const targetFn = (typeof solve === 'function' ? solve : (typeof solution === 'function' ? solution : (typeof main === 'function' ? main : null)));
-
-  if (!targetFn) {
-      console.error("No callable function found. Define solve(), solution(), or main().");
-      process.exit(1);
-  }
-
-  for (let i = 0; i < cases.length; i++) {
-      try {
-          let input = cases[i];
-          let actual = targetFn(input);
-          console.log("===RESULT===");
-          console.log(typeof actual === 'object' ? JSON.stringify(actual) : actual);
-      } catch(err) {
-          console.log("===RESULT===");
-          console.log("ERROR: " + err.message);
+      // Non-intrusive Wrapper logic
+      let submissionCode = sourceCode;
+      
+      if ([63, 74].includes(languageId)) {
+        submissionCode = `${sourceCode}\n\ntry { 
+          const target = (typeof solve==='function'?solve:(typeof solution==='function'?solution:(typeof main==='function'?main:null)));
+          if(target && target.length > 0) { 
+            const input = require('fs').readFileSync(0, 'utf-8');
+            const res = target(input);
+            if(res !== undefined) process.stdout.write(typeof res==='object'?JSON.stringify(res):String(res));
+          }
+        } catch(e) {}`;
+      } 
+      else if (languageId === 71) {
+        submissionCode = `${sourceCode}\n\nimport sys, json
+try:
+    target = globals().get('solve') or globals().get('solution') or globals().get('main')
+    if target:
+        import inspect
+        sig = inspect.signature(target)
+        if len(sig.parameters) > 0:
+            input_data = sys.stdin.read()
+            if input_data:
+                res = target(input_data)
+                if res is not None: print(json.dumps(res) if isinstance(res, (dict, list)) else res, end='')
+except Exception: pass`;
       }
-  }
-} catch(e) {
-  console.error("Wrapper execution failed: " + e.message);
-}
-`;
-  } else if (languageId === 71) {
-    // Wrap Python
-    wrappedCode = `
-import sys
-import json
 
-${sourceCode}
+      console.log(`[Judge0] Case ${idx+1} | Stdin: ${stdin.replace(/\n/g, '\\n').substring(0, 30)}...`);
 
-def __run_tests():
-    DELIMITER = "${DELIMITER}"
-    all_input = sys.stdin.read().strip()
-    if not all_input:
-        return
-        
-    cases = [s.strip() for s in all_input.split(DELIMITER)]
-    
-    target_fn = None
-    if 'solve' in globals(): target_fn = solve
-    elif 'solution' in globals(): target_fn = solution
-    elif 'main' in globals(): target_fn = main
-    
-    if not target_fn:
-        print("No callable function found. Define solve(), solution(), or main().", file=sys.stderr)
-        sys.exit(1)
-        
-    for tc in cases:
-        try:
-            actual = target_fn(tc)
-            print("===RESULT===")
-            if isinstance(actual, (dict, list)):
-                print(json.dumps(actual))
-            else:
-                print(actual)
-        except Exception as e:
-            print("===RESULT===")
-            print("ERROR: " + str(e))
+      const result = await submitCode({
+        source_code: submissionCode,
+        language_id: languageId,
+        stdin,
+        expected_output: expected
+      });
 
-if __name__ == "__main__":
-    __run_tests()
-`;
-  } else if (languageId === 62) {
-      // For Java, we can't easily append a wrapper class if they define 'public class Solution'.
-      // Java execution relies on whatever they typed. So we skip wrapping and let their code read stdin.
-  } else if (languageId === 54) {
-      // Same for C++.
-  }
+      const actual = result.output;
+      // Critical fix: don't overwrite falsy 0 or empty string if execution succeeded
+      const displayOutput = (actual !== undefined && actual !== null && actual !== "") 
+        ? String(actual).trim() 
+        : (result.success ? "" : (result.error || "Error"));
 
-  const result = await submitCode({
-    source_code: wrappedCode,
-    language_id: languageId,
-    stdin: stdin
-  });
+      // Standardize comparison - ensure both are trimmed strings
+      const passed = (displayOutput === expected);
 
-  if (!result.success && result.errorType === 'compile') {
+      return {
+        input: tc.input,
+        // Provide redundant keys to support all possible frontend/service mappings
+        expected: expected,
+        expected_output: expected,
+        expectedOutput: expected,
+        actual: displayOutput,
+        actual_output: displayOutput,
+        actualOutput: displayOutput,
+        passed: passed,
+        status: result.status || "Completed",
+        stderr: result.stderr || "",
+        compile_output: result.compileOutput || "",
+        description: tc.description || `Test case ${idx + 1}`,
+        time: result.time,
+        memory: result.memory
+      };
+    });
+
+    // 2. Wait for all submissions to finish in parallel
+    const results = await Promise.all(executionPromises);
+
+    let allPassed = results.every(r => r.passed);
+    let combinedOutput = results.map((r, i) => `[Case ${i+1}]: ${r.actual}`).join('\n');
+    let firstError = results.find(r => !r.passed && (r.stderr || r.compile_output));
+
     return {
-      passed: false,
-      results: [],
-      error: 'Compilation Error: ' + result.error,
-      output: result.output || ''
+      passed: allPassed,
+      results: results,
+      error: allPassed ? null : (firstError ? (firstError.compile_output || firstError.stderr || firstError.status) : "Some tests failed"),
+      output: combinedOutput,
+      time: results[0]?.time, // Approximate from first case
+      memory: results[0]?.memory
     };
-  }
-  
-  if (!result.success && ['timeout', 'service_unavailable'].includes(result.errorType)) {
-    return {
-      passed: false,
-      results: [],
-      error: result.error,
-      output: ''
-    };
-  }
 
-  const rawOutput = (result.output || '').trim();
-  const rawStderr = (result.stderr || '').trim();
-  
-  if (!result.success && (result.errorType === 'runtime' || result.errorType === 'api_error')) {
-     if (rawOutput.indexOf("===RESULT===") === -1) {
-       return {
-         passed: false,
-         results: [],
-         error: 'Execution Error: ' + result.error + (rawStderr ? '\\nStderr: ' + rawStderr : ''),
-         output: rawOutput
-       };
-     }
+  } catch (error) {
+    console.error("[Judge0] executeBatch parallel error:", error.message);
+    return { passed: false, results: [], error: error.message, output: "" };
   }
-
-  // Parse outputs by splitting uniquely on "===RESULT==="
-  const outputBlocks = rawOutput.split("===RESULT===").slice(1).map(s => s.trim());
-  let allPassed = true;
-  const mappedResults = testCases.map((tc, idx) => {
-    let actualStr = idx < outputBlocks.length ? outputBlocks[idx] : "No output";
-    let isError = actualStr.startsWith("ERROR: ");
-    
-    let expectedStr = tc.expectedOutput !== undefined ? String(tc.expectedOutput) : String(tc.expected);
-    
-    let passed = false;
-    if (!isError) {
-      // Try loose comparison
-      passed = actualStr === expectedStr || 
-               actualStr.replace(/\\s+/g, '') === expectedStr.replace(/\\s+/g, '');
-    }
-    
-    if (!passed) allPassed = false;
-    
-    return {
-      input: typeof tc.input === 'object' ? JSON.stringify(tc.input) : String(tc.input),
-      expected: expectedStr,
-      actual: actualStr,
-      passed: passed,
-      description: tc.description || `Test case ${idx + 1}`
-    };
-  });
-
-  return {
-    passed: allPassed,
-    results: mappedResults,
-    error: result.success ? null : (result.error || rawStderr || null),
-    output: rawOutput
-  };
 }
 
 module.exports = {
