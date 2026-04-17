@@ -23,6 +23,7 @@ const practiceSessionSchema = new mongoose.Schema(
     },
     questions: [
       {
+        questionId: String,
         type: {
           type: String,
           enum: ['mcq', 'theoretical', 'coding'],

@@ -20,6 +20,9 @@ const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1/models
 const DELAY_MS = 1500;
 const RETRY_BACKOFF = [1500, 3000];
 const USE_MOCK = process.env.USE_MOCK === 'true' || false;
+let GEMINI_DISABLED_FOR_RUNTIME = false;
+let GEMINI_DISABLE_NOTICE_LOGGED = false;
+const SHOULD_LOG_QUESTION_DEBUG = process.env.NODE_ENV !== 'production';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -49,10 +52,119 @@ const isRateLimitError = (error) => {
   return status === 429 || message.includes('quota') || message.includes('limit') || payload.includes('quota') || payload.includes('limit');
 };
 
+const isPermissionDeniedError = (error) => {
+  const status = Number(error?.response?.status);
+  const payload = JSON.stringify(error?.response?.data || {}).toLowerCase();
+  const message = String(error?.message || '').toLowerCase();
+  return status === 403 || payload.includes('permission_denied') || message.includes('permission denied') || payload.includes('denied access');
+};
+
 const getRateLimitResponse = () => ({
   errorType: 'RATE_LIMIT',
   message: 'API limit reached'
 });
+
+const isMeaninglessAnswer = (answer = '') => {
+  const raw = String(answer || '').trim();
+  if (!raw) return true;
+  if (raw.length < 3) return true;
+  if (/^[a-z]{1,4}$/i.test(raw) && !/[aeiou]/i.test(raw)) return true;
+  if (/^(ds|asd|fghtfh|test|ok|hi)$/i.test(raw)) return true;
+  return false;
+};
+
+const localEvaluateAnswer = (question, answer) => {
+  const q = String(question || '').toLowerCase();
+  const a = String(answer || '').trim();
+
+  if (isMeaninglessAnswer(a)) {
+    return {
+      score: 0,
+      technicalAccuracy: 'Invalid or missing answer',
+      clarity: 'Invalid or missing answer',
+      depth: 'Invalid or missing answer',
+      strengths: [],
+      weaknesses: ['Invalid or missing answer'],
+      improvements: ['Provide a complete technical answer with concept, reasoning, and example.'],
+      issue: 'Invalid or missing answer',
+      correctConcept: 'Answer should include core concept, why it works, and one practical example.',
+      genericFlags: ['LOCAL_EVAL_FALLBACK'],
+      promptVersion: `${evaluationPrompt.version}.local-fallback`
+    };
+  }
+
+  const words = a.split(/\s+/).filter(Boolean);
+  const lowerA = a.toLowerCase();
+  const hasStructure = /\b(first|second|third|because|therefore|for example|example)\b/.test(lowerA);
+
+  const rubric = {
+    conceptUnderstanding: 0,
+    accuracy: 0,
+    completeness: 0,
+    clarity: 0
+  };
+
+  // Base scoring by substance
+  rubric.completeness = Math.min(25, Math.floor(words.length / 4));
+  rubric.clarity = hasStructure ? 20 : 12;
+
+  // Topic-aware checks
+  if (q.includes('react')) {
+    const hasUseState = /\busestate\b/.test(lowerA);
+    const hasUseEffect = /\buseeffect\b/.test(lowerA);
+    const hasFunctional = /\bfunctional component|function component|hooks\b/.test(lowerA);
+    rubric.conceptUnderstanding = hasUseState || hasUseEffect ? 18 : 10;
+    rubric.accuracy = (hasUseState ? 8 : 0) + (hasUseEffect ? 8 : 0) + (hasFunctional ? 6 : 0);
+  } else if (q.includes('git')) {
+    const hasBranch = /\bbranch|feature branch\b/.test(lowerA);
+    const hasMerge = /\bmerge\b/.test(lowerA);
+    const hasRebase = /\brebase\b/.test(lowerA);
+    rubric.conceptUnderstanding = hasBranch ? 18 : 10;
+    rubric.accuracy = (hasBranch ? 8 : 0) + (hasMerge ? 8 : 0) + (hasRebase ? 6 : 0);
+  } else if (q.includes('rest')) {
+    const hasStateless = /\bstateless\b/.test(lowerA);
+    const hasMethods = /\bget|post|put|patch|delete\b/.test(lowerA);
+    const hasClientServer = /\bclient|server\b/.test(lowerA);
+    rubric.conceptUnderstanding = hasStateless ? 20 : 12;
+    rubric.accuracy = (hasStateless ? 10 : 0) + (hasMethods ? 8 : 0) + (hasClientServer ? 6 : 0);
+  } else if (q.includes('typescript') || q.includes('js vs ts')) {
+    const hasTyping = /\bstatic type|typing|types\b/.test(lowerA);
+    const hasCompile = /\bcompile|compile-time\b/.test(lowerA);
+    const hasScale = /\blarge|scal|maintain|refactor\b/.test(lowerA);
+    rubric.conceptUnderstanding = hasTyping ? 20 : 12;
+    rubric.accuracy = (hasTyping ? 10 : 0) + (hasCompile ? 8 : 0) + (hasScale ? 6 : 0);
+  } else {
+    rubric.conceptUnderstanding = words.length > 20 ? 18 : 12;
+    rubric.accuracy = words.length > 30 ? 18 : 12;
+  }
+
+  rubric.accuracy = Math.min(25, rubric.accuracy);
+  rubric.conceptUnderstanding = Math.min(25, rubric.conceptUnderstanding);
+  rubric.completeness = Math.min(25, rubric.completeness);
+  rubric.clarity = Math.min(25, rubric.clarity);
+
+  const total = rubric.conceptUnderstanding + rubric.accuracy + rubric.completeness + rubric.clarity;
+
+  return {
+    score: Number((total / 10).toFixed(1)),
+    technicalAccuracy: `Local rubric score ${rubric.accuracy}/25`,
+    clarity: `Local rubric score ${rubric.clarity}/25`,
+    depth: `Local rubric score ${rubric.completeness}/25`,
+    strengths: ['Answer submitted and evaluated with local rubric fallback.'],
+    weaknesses: total < 55 ? ['Add clearer structure and include concrete technical points.'] : [],
+    improvements: [
+      'Use concept -> reasoning -> example format.',
+      'Cover key terms expected by the topic.'
+    ],
+    issue: total < 55 ? 'Partial coverage of expected technical points.' : 'No major issue detected.',
+    correctConcept: 'Include core concept, technical accuracy, completeness, and clear explanation.',
+    breakdown: rubric,
+    maxScore: 100,
+    confidence: total >= 75 ? 'HIGH' : total >= 50 ? 'MEDIUM' : 'LOW',
+    genericFlags: ['LOCAL_EVAL_FALLBACK'],
+    promptVersion: `${evaluationPrompt.version}.local-fallback`
+  };
+};
 
 const findBalancedJsonSnippet = (text) => {
   const src = String(text || '');
@@ -139,6 +251,12 @@ const callGemini = async (prompt, attempt = 0) => {
     throw new Error('Mock mode enabled');
   }
 
+  if (GEMINI_DISABLED_FOR_RUNTIME) {
+    const disabledError = new Error('Gemini temporarily disabled for this runtime due to permission denial');
+    disabledError.geminiDisabled = true;
+    throw disabledError;
+  }
+
   if (!process.env.GEMINI_API_KEY) {
     logger.error('GEMINI_API_KEY environment variable not set');
     throw new Error('Gemini API key is not configured');
@@ -160,11 +278,13 @@ const callGemini = async (prompt, attempt = 0) => {
       }
     };
 
+    const apiKey = encodeURIComponent(process.env.GEMINI_API_KEY);
+    const endpointWithKey = `${GEMINI_API_ENDPOINT}?key=${apiKey}`;
+
     const response = await axios.post(
-      GEMINI_API_ENDPOINT,
+      endpointWithKey,
       requestBody,
       {
-        params: { key: process.env.GEMINI_API_KEY },
         timeout: 30000
       }
     );
@@ -187,7 +307,15 @@ const callGemini = async (prompt, attempt = 0) => {
     return parsed;
   } catch (error) {
     const status = error.response?.status || (error.isParseError ? 'PARSE' : undefined);
-    const isRetryable = status === 429 || status >= 500 || status === 'PARSE' || !status;
+    const isRetryable = status >= 500 || status === 'PARSE' || !status;
+
+    if (isPermissionDeniedError(error)) {
+      GEMINI_DISABLED_FOR_RUNTIME = true;
+      if (!GEMINI_DISABLE_NOTICE_LOGGED) {
+        logger.warn('Gemini access denied (403). Disabling Gemini calls for this runtime and using local fallbacks.');
+        GEMINI_DISABLE_NOTICE_LOGGED = true;
+      }
+    }
 
     logger.error(`Gemini API Error [${status || 'NETWORK'}]: ${error.message || 'Unknown error'}`, {
       status,
@@ -220,8 +348,19 @@ const callGeminiWithPromptControl = async ({ prompt, promptVersion, schema, fall
 
     return fallback;
   } catch (error) {
+    if (error?.geminiDisabled || isPermissionDeniedError(error)) {
+      return {
+        ...(fallback && typeof fallback === 'object' ? fallback : {}),
+        errorType: 'PERMISSION_DENIED',
+        message: 'Gemini access denied. Please contact support.'
+      };
+    }
+
     logger.error('Gemini call failed with prompt control', { promptVersion, error: error.message });
     if (isRateLimitError(error)) {
+      logger.warn('GEMINI_RATE_LIMIT_NOTIFY: Gemini returned 429/quota limit. Using fallback response.', {
+        promptVersion
+      });
       return {
         ...(fallback && typeof fallback === 'object' ? fallback : {}),
         ...getRateLimitResponse()
@@ -403,23 +542,133 @@ exports.generateInterviewQuestions = async (context) => {
       fallback: payload.fallback
     });
 
-    if (!result) {
-      logger.warn('Interview question generation failed, using fallback', { context });
-      // Build fallback questions based on context
-      const fallbackQuestions = buildFallbackInterviewQuestions(context);
-      return fallbackQuestions;
+    if (SHOULD_LOG_QUESTION_DEBUG) {
+      console.log('RAW_OUTPUT:');
+      console.log(result);
     }
+
+    if (!result) {
+      logger.warn('Interview question generation failed', { context });
+      if (context?.interviewType === 'coding') {
+        return {
+          ...buildFallbackInterviewQuestions(context),
+          source: 'fallback',
+          fallbackReason: 'gemini_unavailable'
+        };
+      }
+      return {
+        questions: [],
+        source: 'fallback',
+        fallbackReason: 'gemini_unavailable'
+      };
+    }
+
+    if (result?.errorType === 'RATE_LIMIT') {
+      if (context?.interviewType === 'coding') {
+        return {
+          ...buildFallbackInterviewQuestions(context),
+          source: 'fallback',
+          fallbackReason: 'gemini_rate_limit',
+          errorType: 'RATE_LIMIT'
+        };
+      }
+      return {
+        questions: [],
+        source: 'fallback',
+        fallbackReason: 'gemini_rate_limit',
+        errorType: 'RATE_LIMIT'
+      };
+    }
+
+    if (result?.errorType === 'PERMISSION_DENIED') {
+      if (context?.interviewType === 'coding') {
+        return {
+          ...buildFallbackInterviewQuestions(context),
+          source: 'fallback',
+          fallbackReason: 'gemini_permission_denied',
+          errorType: 'PERMISSION_DENIED'
+        };
+      }
+      return {
+        questions: [],
+        source: 'fallback',
+        fallbackReason: 'gemini_permission_denied',
+        errorType: 'PERMISSION_DENIED'
+      };
+    }
+
     const normalized = normalizeQuestionsPayload(result, context?.questionCount || 6);
     if (!normalized) {
-      logger.warn('Interview question payload invalid, using fallback', { context });
-      return buildFallbackInterviewQuestions(context);
+      logger.warn('Interview question payload invalid', { context });
+      if (context?.interviewType === 'coding') {
+        return {
+          ...buildFallbackInterviewQuestions(context),
+          source: 'fallback',
+          fallbackReason: 'invalid_gemini_payload'
+        };
+      }
+      return {
+        questions: [],
+        source: 'fallback',
+        fallbackReason: 'invalid_gemini_payload'
+      };
     }
-    return normalized;
+
+    if (SHOULD_LOG_QUESTION_DEBUG) {
+      console.log('JSON_OUTPUT:');
+      console.log(JSON.stringify(normalized, null, 2));
+    }
+
+    return {
+      ...normalized,
+      source: 'gemini'
+    };
   } catch (error) {
-    logger.error('generateInterviewQuestions error, using fallback', { error: error.message });
-    const fallbackQuestions = buildFallbackInterviewQuestions(context);
-    return fallbackQuestions;
+    logger.error('generateInterviewQuestions error', { error: error.message });
+    if (context?.interviewType === 'coding') {
+      return {
+        ...buildFallbackInterviewQuestions(context),
+        source: 'fallback',
+        fallbackReason: 'generation_exception'
+      };
+    }
+    return {
+      questions: [],
+      source: 'fallback',
+      fallbackReason: 'generation_exception'
+    };
   }
+};
+
+// Helper function to interleave questions starting with theoretical
+const interleaveMixedQuestions = (coding, theory, totalCount) => {
+  const result = [];
+  let codingIndex = 0;
+  let theoryIndex = 0;
+
+  for (let i = 0; i < totalCount; i++) {
+    if (i % 2 === 0) {
+      // Even indices (0, 2, 4...): take from theory
+      if (theoryIndex < theory.length) {
+        result.push(theory[theoryIndex]);
+        theoryIndex++;
+      } else if (codingIndex < coding.length) {
+        result.push(coding[codingIndex]);
+        codingIndex++;
+      }
+    } else {
+      // Odd indices (1, 3, 5...): take from coding
+      if (codingIndex < coding.length) {
+        result.push(coding[codingIndex]);
+        codingIndex++;
+      } else if (theoryIndex < theory.length) {
+        result.push(theory[theoryIndex]);
+        theoryIndex++;
+      }
+    }
+  }
+
+  return result;
 };
 
 // Helper function to build fallback interview questions
@@ -438,7 +687,8 @@ const buildFallbackInterviewQuestions = (context) => {
     const codingTopic = topics[0] || 'Arrays';
     const codingQuestions = getFallbackCodingQuestions({ topic: codingTopic, difficulty: 'medium', count: codingCount });
     const theoryQuestions = getFallbackTheoreticalQuestions({ topics, count: theoryCount });
-    return { questions: [...codingQuestions, ...theoryQuestions].slice(0, count) };
+    const interleavedQuestions = interleaveMixedQuestions(codingQuestions, theoryQuestions, count);
+    return { questions: interleavedQuestions };
   }
 
   return {
@@ -470,12 +720,23 @@ exports.evaluateAnswer = async (question, answer) => {
     }
   });
 
-  return callGeminiWithPromptControl({
+  const result = await callGeminiWithPromptControl({
     prompt: payload.prompt,
     promptVersion: payload.version,
     schema: payload.schema,
     fallback: payload.fallback
   });
+
+  if (result?.errorType === 'RATE_LIMIT' || result?.errorType === 'PERMISSION_DENIED') {
+    return localEvaluateAnswer(question, answer);
+  }
+
+  // If fallback produced "Not evaluated" content, force deterministic local evaluation.
+  if (String(result?.technicalAccuracy || '').toLowerCase().includes('not evaluated')) {
+    return localEvaluateAnswer(question, answer);
+  }
+
+  return result;
 };
 
 exports.evaluateCodeSubmission = async (question, code, language) => {

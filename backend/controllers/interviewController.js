@@ -10,6 +10,104 @@ const ResumeConsistencyEngine = require('../engines/resumeConsistencyEngine');
 const SkillTrajectoryEngine = require('../engines/skillTrajectoryEngine');
 const EvaluationReliabilityEngine = require('../engines/evaluationReliabilityEngine');
 const logger = require('../utils/logger');
+const { getFallbackCodingQuestions } = require('../services/fallbackQuestions');
+
+const DIFFICULTY_TIME_LIMITS = {
+  easy: 60,
+  medium: 120,
+  hard: 180
+};
+
+const getQuestionTimeLimitByDifficulty = (difficulty = 'medium') => {
+  const key = String(difficulty || 'medium').toLowerCase();
+  return DIFFICULTY_TIME_LIMITS[key] || DIFFICULTY_TIME_LIMITS.medium;
+};
+
+const normalizeTestCaseInput = (input) => {
+  if (Array.isArray(input) && input.length === 1 && typeof input[0] === 'string') {
+    return input[0];
+  }
+  if (input === undefined || input === null) return '';
+  if (typeof input === 'string') return input;
+  return typeof input === 'object' ? JSON.stringify(input) : String(input);
+};
+
+const normalizeExecutionTestCases = (testCases = []) => {
+  return (Array.isArray(testCases) ? testCases : []).map((tc, index) => {
+    const expected = String(tc?.expectedOutput ?? tc?.expected_output ?? tc?.expected ?? tc?.output ?? '').trim();
+    return {
+      input: normalizeTestCaseInput(tc?.input),
+      expected_output: expected,
+      expectedOutput: expected,
+      expected,
+      output: expected,
+      isHidden: Boolean(tc?.isHidden || index >= 2),
+      description: tc?.description || (index < 2 ? 'Visible test case' : 'Hidden test case')
+    };
+  });
+};
+
+const normalizeCodingQuestionForResponse = (question = {}) => {
+  const testCases = normalizeExecutionTestCases(question?.testCases || question?.test_cases || []);
+  const visibleCases = testCases.filter((tc) => !tc.isHidden);
+
+  const examples = Array.isArray(question?.examples) && question.examples.length > 0
+    ? question.examples.map((ex) => ({
+        input: String(ex?.input ?? ''),
+        output: String(ex?.output ?? ex?.expected ?? ex?.expected_output ?? ex?.expectedOutput ?? ''),
+        explanation: ex?.explanation || ''
+      }))
+    : visibleCases.slice(0, 2).map((tc) => ({
+        input: String(tc.input ?? ''),
+        output: String(tc.expected_output ?? ''),
+        explanation: tc.description || ''
+      }));
+
+  return {
+    ...question,
+    type: 'coding',
+    isCoding: true,
+    inputFormat: question?.inputFormat || question?.input_format || '',
+    outputFormat: question?.outputFormat || question?.output_format || '',
+    constraints: Array.isArray(question?.constraints) ? question.constraints : [],
+    testCases,
+    test_cases: testCases.map((tc) => ({
+      input: tc.input,
+      expected_output: tc.expected_output,
+      isHidden: tc.isHidden,
+      description: tc.description
+    })),
+    hiddenTestCases: testCases
+      .filter((tc) => tc.isHidden)
+      .map((tc) => ({
+        input: tc.input,
+        expected: tc.expected_output,
+        expected_output: tc.expected_output,
+        expectedOutput: tc.expected_output,
+        output: tc.expected_output,
+        isHidden: true,
+        description: tc.description
+      })),
+    examples
+  };
+};
+
+const normalizeInterviewForResponse = (interview) => {
+  const base = interview?.toObject ? interview.toObject() : interview;
+  if (!base) return base;
+
+  const normalizeQuestion = (q = {}) => {
+    const isCoding = Boolean(q?.isCoding || q?.type === 'coding');
+    if (!isCoding) return q;
+    return normalizeCodingQuestionForResponse(q);
+  };
+
+  return {
+    ...base,
+    questions: Array.isArray(base.questions) ? base.questions.map(normalizeQuestion) : [],
+    questionsAsked: Array.isArray(base.questionsAsked) ? base.questionsAsked.map(normalizeQuestion) : []
+  };
+};
 
 const ensureInterviewAccess = (interview, user) => {
   if (!interview) return { ok: false, status: 404, message: 'Interview not found' };
@@ -172,6 +270,36 @@ const evaluateAllAnswersAfterCompletion = async (interview) => {
   return { mistakes, perQuestionScore };
 };
 
+const interleaveMixedQuestions = (coding, theory, totalCount) => {
+  const result = [];
+  let codingIndex = 0;
+  let theoryIndex = 0;
+
+  for (let i = 0; i < totalCount; i++) {
+    if (i % 2 === 0) {
+      // Even indices (0, 2, 4...): take from theory
+      if (theoryIndex < theory.length) {
+        result.push(theory[theoryIndex]);
+        theoryIndex++;
+      } else if (codingIndex < coding.length) {
+        result.push(coding[codingIndex]);
+        codingIndex++;
+      }
+    } else {
+      // Odd indices (1, 3, 5...): take from coding
+      if (codingIndex < coding.length) {
+        result.push(coding[codingIndex]);
+        codingIndex++;
+      } else if (theoryIndex < theory.length) {
+        result.push(theory[theoryIndex]);
+        theoryIndex++;
+      }
+    }
+  }
+
+  return result;
+};
+
 const enforceInterviewTypeComposition = ({ questions = [], interviewType = 'theoretical' }) => {
   const normalizedQuestions = Array.isArray(questions) ? questions : [];
 
@@ -202,10 +330,16 @@ const enforceInterviewTypeComposition = ({ questions = [], interviewType = 'theo
     }));
   }
 
+  // Mixed mode: interleave questions starting with theoretical
   const targetCodingCount = Math.max(1, Math.round(normalizedQuestions.length / 2));
-  const mixed = [...coding.slice(0, targetCodingCount), ...theory.slice(0, normalizedQuestions.length - targetCodingCount)];
-  const fallback = mixed.length === normalizedQuestions.length ? mixed : normalizedQuestions;
-  return fallback.map((q) => ({
+  const targetTheoryCount = normalizedQuestions.length - targetCodingCount;
+  const interleavedQuestions = interleaveMixedQuestions(
+    coding.slice(0, targetCodingCount),
+    theory.slice(0, targetTheoryCount),
+    normalizedQuestions.length
+  );
+
+  return interleavedQuestions.map((q) => ({
     ...q,
     type: q?.isCoding || q?.type === 'coding' ? 'coding' : 'theoretical',
     isCoding: Boolean(q?.isCoding || q?.type === 'coding')
@@ -214,12 +348,28 @@ const enforceInterviewTypeComposition = ({ questions = [], interviewType = 'theo
 
 exports.createInterview = async (req, res, next) => {
   try {
+    console.log("📥 REQUEST BODY:", {
+      interviewType: req.body.interviewType,
+      questionCount: req.body.questionCount,
+      rawTextLength: req.body.rawText?.length
+    });
+
     const { 
       interviewType = 'theoretical', 
       focusTopics = [],
       focus = 'random',
       questionCount = 6
     } = req.body;
+
+    const isMixedInterview = interviewType === 'mixed';
+    if (isMixedInterview) {
+      console.log('🧪 MIXED DEBUG: createInterview started', {
+        userId: req.user?.id,
+        focus,
+        requestedQuestionCount: questionCount,
+        focusTopicsCount: Array.isArray(focusTopics) ? focusTopics.length : 0
+      });
+    }
 
     const resume = await Resume.findOne({ userId: req.user.id });
     if (!resume) {
@@ -249,28 +399,177 @@ exports.createInterview = async (req, res, next) => {
       ? AdaptiveEngine.recommendNextTopics(skillPerformanceMap, previousInterviews, 3)
       : [];
 
-    const questionsResult = await geminiService.generateInterviewQuestionsWithMetadata({
-      structuredData: resume.structuredData,
-      rawText: resume.extractedText,
-      focusTopics: topicsToFocus.length > 0 ? topicsToFocus : weakTopics,
-      questionCount: Math.min(questionCount, 10),
-      interviewType
-    });
+    const resumeSeedTopics = [
+      resume?.structuredData?.primaryDomain,
+      ...(Array.isArray(resume?.structuredData?.skills) ? resume.structuredData.skills.slice(0, 3) : []),
+      ...(Array.isArray(resume?.structuredData?.technologies) ? resume.structuredData.technologies.slice(0, 2) : [])
+    ]
+      .map((t) => String(t || '').trim())
+      .filter(Boolean)
+      .slice(0, 5);
 
-    if (!questionsResult?.questions || questionsResult.questions.length === 0) {
+    const resolvedFocusTopics = topicsToFocus.length > 0
+      ? topicsToFocus
+      : (weakTopics.length > 0 ? weakTopics : resumeSeedTopics);
+
+    if (isMixedInterview) {
+      console.log('🧪 MIXED DEBUG: pre-gemini context', {
+        resolvedFocusTopics,
+        resolvedFocusTopicsCount: resolvedFocusTopics.length,
+        resumeExtractedTextLength: resume?.extractedText?.length || 0,
+        cappedQuestionCount: Math.min(questionCount, 10)
+      });
+    }
+
+    const cappedQuestionCount = Math.min(questionCount, 10);
+    let questionsResult = null;
+    let filteredQuestions = [];
+
+    if (isMixedInterview) {
+      const codingCount = Math.max(1, Math.floor(cappedQuestionCount / 2));
+      const theoryCount = Math.max(0, cappedQuestionCount - codingCount);
+
+      let geminiError = null;
+      if (theoryCount > 0) {
+        try {
+          questionsResult = await geminiService.generateInterviewQuestionsWithMetadata({
+            structuredData: resume.structuredData,
+            rawText: resume.extractedText,
+            focusTopics: resolvedFocusTopics,
+            questionCount: theoryCount,
+            interviewType: 'theoretical'
+          });
+        } catch (error) {
+          geminiError = error;
+          questionsResult = {
+            source: 'fallback',
+            fallbackReason: 'gemini_unavailable',
+            questions: []
+          };
+        }
+      } else {
+        questionsResult = { source: 'gemini', questions: [] };
+      }
+
+      const geminiQuestions = Array.isArray(questionsResult?.questions) ? questionsResult.questions : [];
+      const theoreticalQuestions = questionsResult?.source === 'fallback'
+        ? []
+        : geminiQuestions
+            .filter((q) => !(q?.isCoding || q?.type === 'coding'))
+            .slice(0, theoryCount)
+            .map((q) => ({
+              ...q,
+              type: 'theoretical',
+              isCoding: false
+            }));
+
+      const codingTopic = resolvedFocusTopics[0] || 'Arrays';
+      const codingQuestions = getFallbackCodingQuestions({
+        topic: codingTopic,
+        difficulty: 'medium',
+        count: codingCount
+      }).map((q) => ({
+        ...q,
+        type: 'coding',
+        isCoding: true
+      }));
+
+      const finalQuestions = interleaveMixedQuestions(
+        codingQuestions,
+        theoreticalQuestions,
+        theoreticalQuestions.length + codingQuestions.length
+      );
+
+      console.log('MIXED MODE:', {
+        geminiWorked: questionsResult?.source !== 'fallback',
+        theoryCount: theoreticalQuestions.length,
+        codingCount: codingQuestions.length
+      });
+
+      console.log('🧪 MIXED DEBUG: gemini response summary', {
+        source: questionsResult?.source,
+        fallbackReason: questionsResult?.fallbackReason || null,
+        geminiError: geminiError ? geminiError.message : null,
+        totalGenerated: geminiQuestions.length,
+        generatedCodingCount: geminiQuestions.filter((q) => q?.isCoding || q?.type === 'coding').length,
+        generatedTheoryCount: geminiQuestions.filter((q) => !(q?.isCoding || q?.type === 'coding')).length
+      });
+
+      filteredQuestions = finalQuestions;
+    } else {
+      questionsResult = await geminiService.generateInterviewQuestionsWithMetadata({
+        structuredData: resume.structuredData,
+        rawText: resume.extractedText,
+        focusTopics: resolvedFocusTopics,
+        questionCount: cappedQuestionCount,
+        interviewType
+      });
+    }
+
+    if (interviewType === 'theoretical' && questionsResult?.source === 'fallback') {
+      const reason = questionsResult?.fallbackReason || 'unknown_reason';
+      const isRateLimit = reason === 'gemini_rate_limit';
+
+      if (isMixedInterview) {
+        console.log('🧪 MIXED DEBUG: request blocked due to fallback source', {
+          fallbackReason: reason,
+          statusCode: isRateLimit ? 429 : 503
+        });
+      }
+
+      return res.status(isRateLimit ? 429 : 503).json({
+        success: false,
+        message: isRateLimit
+          ? `Gemini rate limit reached while creating ${interviewType} interview. Please retry shortly.`
+          : `Gemini is required for ${interviewType} interviews but is unavailable (${reason}).`
+      });
+    }
+
+    if (!isMixedInterview && (!questionsResult?.questions || questionsResult.questions.length === 0)) {
       return res.status(500).json({
         success: false,
         message: 'AI temporarily unavailable. Please retry later.'
       });
     }
 
-    const filteredQuestions = enforceInterviewTypeComposition({
-      questions: questionsResult.questions,
-      interviewType
-    });
+    if (isMixedInterview && filteredQuestions.length === 0) {
+      console.log('🧪 MIXED DEBUG: final mixed questions empty', {
+        source: questionsResult?.source || null,
+        fallbackReason: questionsResult?.fallbackReason || null
+      });
+
+      return res.status(500).json({
+        success: false,
+        message: 'Unable to generate mixed interview questions. Please retry later.'
+      });
+    }
+
+    if (!isMixedInterview) {
+      filteredQuestions = enforceInterviewTypeComposition({
+        questions: questionsResult.questions,
+        interviewType
+      });
+    }
+
+    if (isMixedInterview) {
+      const filteredCodingCount = filteredQuestions.filter((q) => q?.isCoding || q?.type === 'coding').length;
+      const filteredTheoryCount = filteredQuestions.length - filteredCodingCount;
+
+      console.log('🧪 MIXED DEBUG: post-filter composition', {
+        totalFiltered: filteredQuestions.length,
+        filteredCodingCount,
+        filteredTheoryCount,
+        sequencePreview: filteredQuestions.slice(0, 6).map((q) => (q?.isCoding || q?.type === 'coding') ? 'C' : 'T')
+      });
+    }
+
+    const timedQuestions = filteredQuestions.map((q) => ({
+      ...q,
+      timeLimit: getQuestionTimeLimitByDifficulty(q?.difficulty)
+    }));
 
     const skillPerformance = new Map();
-    filteredQuestions.forEach((q) => {
+    timedQuestions.forEach((q) => {
       if (!skillPerformance.has(q.topic)) {
         skillPerformance.set(q.topic, {
           topicName: q.topic,
@@ -284,7 +583,7 @@ exports.createInterview = async (req, res, next) => {
       userId: req.user.id,
       resumeId: resume._id,
       interviewType,
-      questions: filteredQuestions,
+      questions: timedQuestions,
       questionsAsked: [],
       currentDifficulty: 'medium',
       skillPerformance,
@@ -298,12 +597,26 @@ exports.createInterview = async (req, res, next) => {
       status: 'in-progress'
     });
 
+    if (isMixedInterview) {
+      console.log('🧪 MIXED DEBUG: interview created successfully', {
+        interviewId: interview?._id,
+        savedQuestionsCount: interview?.questions?.length || 0
+      });
+    }
+
     res.status(201).json({
       success: true,
       message: 'Interview session created',
-      data: interview
+      data: normalizeInterviewForResponse(interview)
     });
   } catch (error) {
+    if (req.body?.interviewType === 'mixed') {
+      console.log('🧪 MIXED DEBUG: createInterview error', {
+        message: error?.message,
+        stackTop: String(error?.stack || '').split('\n').slice(0, 3).join(' | ')
+      });
+    }
+
     logger.error('Interview creation failed', error);
     next(error);
   }
@@ -326,17 +639,33 @@ exports.submitAnswer = async (req, res, next) => {
       return res.status(access.status).json({ success: false, message: access.message });
     }
 
+    const existingAnswer = (interview.answers || []).find((a) => a.questionIndex === questionIndex);
+    if (existingAnswer) {
+      return res.json({
+        success: true,
+        data: {
+          answer: existingAnswer,
+          interview,
+          currentDifficulty: interview.currentDifficulty,
+          sessionMetrics: AdaptiveEngine.calculateSessionMetrics(interview),
+          adaptiveEvent: interview.adaptiveHistory?.[interview.adaptiveHistory.length - 1]
+        },
+        status: interview.status,
+        deduplicated: true
+      });
+    }
+
     const evaluation = buildPendingEvaluation(Boolean(isCodingAnswer));
     let executionResult = null;
 
     const questionMetadata = interview.questions[questionIndex] || {};
 
     if (isCodingAnswer && language) {
-      const providedCases = Array.isArray(questionMetadata.testCases) ? questionMetadata.testCases : [];
+      const providedCases = normalizeExecutionTestCases(questionMetadata.testCases || questionMetadata.test_cases || []);
       const generatedCases = providedCases.length === 0
         ? await geminiService.generateExecutionTestCases(question, language)
         : [];
-      const testCases = providedCases.length > 0 ? providedCases : generatedCases;
+      const testCases = providedCases.length > 0 ? providedCases : normalizeExecutionTestCases(generatedCases);
 
       executionResult = await CodeExecutionEngine.executeCodeSubmission({
         question,
@@ -491,7 +820,31 @@ exports.submitAnswer = async (req, res, next) => {
       };
     }
 
-    await interview.save();
+    try {
+      await interview.save();
+    } catch (saveError) {
+      if (saveError?.name === 'VersionError') {
+        const freshInterview = await Interview.findById(req.params.id);
+        const freshAnswer = (freshInterview?.answers || []).find((a) => a.questionIndex === questionIndex);
+
+        if (freshInterview && freshAnswer) {
+          return res.json({
+            success: true,
+            data: {
+              answer: freshAnswer,
+              interview: freshInterview,
+              currentDifficulty: freshInterview.currentDifficulty,
+              sessionMetrics: AdaptiveEngine.calculateSessionMetrics(freshInterview),
+              adaptiveEvent: freshInterview.adaptiveHistory?.[freshInterview.adaptiveHistory.length - 1]
+            },
+            status: freshInterview.status,
+            deduplicated: true
+          });
+        }
+      }
+
+      throw saveError;
+    }
 
     res.json({
       success: true,
@@ -529,11 +882,11 @@ exports.runCode = async (req, res, next) => {
     }
 
     const questionMetadata = interview.questions[index] || {};
-    const providedCases = Array.isArray(questionMetadata.testCases) ? questionMetadata.testCases : [];
+    const providedCases = normalizeExecutionTestCases(questionMetadata.testCases || questionMetadata.test_cases || []);
     const generatedCases = providedCases.length === 0
       ? await geminiService.generateExecutionTestCases(questionMetadata.question, language)
       : [];
-    const testCases = providedCases.length > 0 ? providedCases : generatedCases;
+    const testCases = providedCases.length > 0 ? providedCases : normalizeExecutionTestCases(generatedCases);
 
     const execution = await CodeExecutionSimulator.execute(code, language, testCases);
     const complexity = CodeExecutionSimulator.analyzeComplexity(code);
@@ -607,7 +960,7 @@ exports.getInterview = async (req, res, next) => {
       return res.status(access.status).json({ success: false, message: access.message });
     }
 
-    res.json({ success: true, data: interview });
+    res.json({ success: true, data: normalizeInterviewForResponse(interview) });
   } catch (error) {
     next(error);
   }
@@ -621,7 +974,7 @@ exports.getCandidateInterviews = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        interviews,
+        interviews: interviews.map((item) => normalizeInterviewForResponse(item)),
         aggregatedMetrics: aggregated
       }
     });
@@ -657,7 +1010,7 @@ exports.getInterviewWithDetails = async (req, res, next) => {
     res.json({
       success: true,
       data: {
-        interview,
+        interview: normalizeInterviewForResponse(interview),
         resume,
         metrics,
         analytics: {

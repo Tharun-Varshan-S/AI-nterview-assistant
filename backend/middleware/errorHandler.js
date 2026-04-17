@@ -4,7 +4,10 @@ const logger = require('../utils/logger');
  * Stage 5: Centralized Error Handler
  */
 const errorHandler = (err, req, res, next) => {
-  const statusCode = err.status || err.statusCode || 500;
+  const parsedStatus = Number(err.statusCode || err.status);
+  const statusCode = Number.isInteger(parsedStatus) && parsedStatus >= 100 && parsedStatus <= 599
+    ? parsedStatus
+    : 500;
   const message = err.message || 'Internal Server Error';
 
   // Log full error for backend diagnostics

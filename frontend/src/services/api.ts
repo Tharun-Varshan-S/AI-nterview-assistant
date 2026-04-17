@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { toast } from 'sonner';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
@@ -6,8 +7,21 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000
 const RETRY_CONFIG = {
   maxRetries: 3,
   retryDelay: 1000, // 1 second
-  retryableStatusCodes: [408, 429, 500, 502, 503, 504],
+  retryableStatusCodes: [408, 500, 502, 503, 504],
   retryableErrors: ['ECONNABORTED', 'ECONNRESET', 'ETIMEDOUT', 'ERR_NETWORK'],
+};
+
+let lastServiceToastAt = 0;
+let lastServiceToastKey = '';
+
+const notifyServiceIssue = (message: string, key: string) => {
+  const now = Date.now();
+  if (lastServiceToastKey === key && now - lastServiceToastAt < 6000) {
+    return;
+  }
+  lastServiceToastKey = key;
+  lastServiceToastAt = now;
+  toast.error(message);
 };
 
 // Create axios instance with defaults
@@ -33,6 +47,26 @@ api.interceptors.response.use(
   (response) => response,
   async (error) => {
     const config = error.config;
+    const status = Number(error.response?.status);
+    const message = String(error.response?.data?.message || error.message || '').toLowerCase();
+    const errorCode = String(error.response?.data?.errorCode || '');
+    const isGeminiServiceIssue =
+      status === 429 ||
+      status === 503 ||
+      errorCode === 'RATE_LIMIT_EXCEEDED' ||
+      message.includes('gemini') ||
+      message.includes('ai service') ||
+      message.includes('rate limit') ||
+      message.includes('quota') ||
+      message.includes('high demand');
+
+    if (isGeminiServiceIssue) {
+      if (status === 429 || message.includes('rate limit') || message.includes('quota')) {
+        notifyServiceIssue('AI quota reached. Please retry in a short while.', 'gemini-429');
+      } else {
+        notifyServiceIssue('AI service is temporarily unavailable. Please retry shortly.', 'gemini-503');
+      }
+    }
 
     // Handle 401 (unauthorized) - clear auth and redirect
     if (error.response?.status === 401) {
@@ -50,11 +84,11 @@ api.interceptors.response.use(
       RETRY_CONFIG.retryableErrors.includes(error.code) ||
       error.message.includes('timeout');
 
-    // Only retry GET, POST, PUT requests (not DELETE)
+    // Retry only idempotent read requests to avoid duplicate submissions.
     const shouldRetry =
       isRetryable &&
       config &&
-      config.method !== 'delete' &&
+      ['get', 'head'].includes(String(config.method || '').toLowerCase()) &&
       (!config.retryCount || config.retryCount < RETRY_CONFIG.maxRetries);
 
     if (shouldRetry) {

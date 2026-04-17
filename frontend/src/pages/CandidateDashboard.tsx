@@ -24,6 +24,7 @@ export default function CandidateDashboard() {
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  const [initializingRounds, setInitializingRounds] = useState(false);
   const [overview, setOverview] = useState<OverviewAnalytics | null>(null);
   const navigate = useNavigate();
 
@@ -105,7 +106,12 @@ export default function CandidateDashboard() {
       return;
     }
 
+    if (initializingRounds) {
+      return;
+    }
+
     try {
+      setInitializingRounds(true);
       const interview = await interviewAPI.create();
       toast.success('Interview session created. You can start right away.');
       navigate(`/candidate/interview/${interview._id}`);
@@ -113,6 +119,8 @@ export default function CandidateDashboard() {
       const errorMessage = error.response?.data?.message || 'Unable to start interview right now.';
       toast.error(errorMessage);
       console.error('Interview creation error:', error);
+    } finally {
+      setInitializingRounds(false);
     }
   };
 
@@ -146,6 +154,17 @@ export default function CandidateDashboard() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-10 font-sans pb-12 animate-in fade-in duration-700">
+      {initializingRounds && (
+        <div className="fixed inset-0 z-50 bg-zinc-950/70 backdrop-blur-sm flex items-center justify-center">
+          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 px-8 py-6 flex items-center gap-3 shadow-2xl">
+            <Spinner size="sm" />
+            <div>
+              <p className="text-sm font-bold text-white">Initializing Rounds</p>
+              <p className="text-xs text-zinc-400">Generating AI questions from your resume profile...</p>
+            </div>
+          </div>
+        </div>
+      )}
       <header className="mt-8 mb-4">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
           <div className="space-y-1.5 text-left">
@@ -334,12 +353,21 @@ export default function CandidateDashboard() {
             <div className="space-y-4 pt-10">
               <Button
                 onClick={startNewInterview}
-                disabled={!resume}
+                disabled={!resume || initializingRounds}
                 size="lg"
                 className="w-full h-14 rounded-full bg-white text-zinc-950 hover:bg-zinc-200 disabled:bg-zinc-800 disabled:text-zinc-600 transition-all font-bold text-base gap-3 shadow-xl shadow-white/5"
               >
-                <Play size={18} fill="currentColor" />
-                Initialize Rounds
+                {initializingRounds ? (
+                  <>
+                    <Spinner size="sm" className="mr-2" />
+                    Initializing...
+                  </>
+                ) : (
+                  <>
+                    <Play size={18} fill="currentColor" />
+                    Initialize Rounds
+                  </>
+                )}
               </Button>
               <p className="text-center text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Estimated Round Duration: 25 MIN</p>
             </div>

@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { interviewAPI } from '../services/api';
+import { interviewAPI, resumeAPI } from '../services/api';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -27,6 +27,8 @@ export default function MockSetupPage() {
   const [focus, setFocus] = useState<'weak skills' | 'random' | 'specific'>('weak skills');
   const [specificTopic, setSpecificTopic] = useState<string>('');
   const [length, setLength] = useState<number>(6);
+  const [resumeReady, setResumeReady] = useState<boolean | null>(null);
+  const [resumeCheckLoading, setResumeCheckLoading] = useState<boolean>(true);
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
@@ -96,8 +98,48 @@ export default function MockSetupPage() {
     },
   ];
 
+  const checkResume = async () => {
+    setResumeCheckLoading(true);
+    try {
+      await resumeAPI.get();
+      setResumeReady(true);
+    } catch {
+      setResumeReady(false);
+    } finally {
+      setResumeCheckLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void checkResume();
+  }, []);
+
+  useEffect(() => {
+    if (focus !== 'specific' && specificTopic) {
+      setSpecificTopic('');
+    }
+  }, [focus, specificTopic]);
+
+  const canStart = useMemo(() => {
+    if (resumeCheckLoading || loading || !resumeReady) {
+      return false;
+    }
+
+    if (focus === 'specific') {
+      return Boolean(specificTopic.trim());
+    }
+
+    return true;
+  }, [focus, specificTopic, loading, resumeCheckLoading, resumeReady]);
+
   const handleStartInterview = async () => {
-    if (focus === 'specific' && !specificTopic) {
+    if (!resumeReady) {
+      toast.error('Please upload your resume before starting a mock interview');
+      navigate('/candidate/dashboard');
+      return;
+    }
+
+    if (focus === 'specific' && !specificTopic.trim()) {
       toast.error('Please select a specific topic');
       return;
     }
@@ -111,7 +153,7 @@ export default function MockSetupPage() {
       };
 
       if (focus === 'specific') {
-        payload.focusTopics = [specificTopic];
+        payload.focusTopics = [specificTopic.trim()];
       }
 
       const interview = await interviewAPI.create(payload);
@@ -119,9 +161,19 @@ export default function MockSetupPage() {
       if (interview?._id) {
         navigate(`/candidate/interview/${interview._id}`);
         toast.success('Mock interview session started!');
+      } else {
+        toast.error('Unable to initialize interview session. Please retry.');
       }
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to start mock interview');
+      const status = Number(error?.response?.status);
+      const message =
+        error?.response?.data?.message ||
+        (status === 429
+          ? 'AI service is rate-limited. Please retry in a minute.'
+          : status === 503
+            ? 'AI service is temporarily unavailable. Please retry shortly.'
+            : 'Failed to start mock interview');
+      toast.error(message);
     } finally {
       setLoading(false);
     }
@@ -368,6 +420,21 @@ export default function MockSetupPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-6">
+          {!resumeCheckLoading && !resumeReady && (
+            <div className="mb-6 rounded-2xl border border-amber-400/30 bg-amber-500/10 p-4">
+              <p className="text-sm text-amber-200">
+                Resume not found. Upload your resume from dashboard before starting the mock interview.
+              </p>
+              <Button
+                variant="outline"
+                className="mt-3 border-amber-400/40 text-amber-200 hover:bg-amber-500/10"
+                onClick={() => navigate('/candidate/dashboard')}
+              >
+                Go To Dashboard
+              </Button>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-8">
             <div className="space-y-1">
               <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Mode</p>
@@ -397,7 +464,7 @@ export default function MockSetupPage() {
 
           <Button
             onClick={handleStartInterview}
-            disabled={loading || (focus === 'specific' && !specificTopic)}
+            disabled={!canStart}
             size="lg"
             className={cn(
               "w-full h-16 text-lg font-bold rounded-2xl shadow-xl transition-all",
@@ -406,10 +473,10 @@ export default function MockSetupPage() {
               "disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
             )}
           >
-            {loading ? (
+            {loading || resumeCheckLoading ? (
               <>
                 <Spinner size="sm" />
-                <span className="ml-2">Initializing...</span>
+                <span className="ml-2">{resumeCheckLoading ? 'Checking profile...' : 'Initializing...'}</span>
               </>
             ) : (
               <>

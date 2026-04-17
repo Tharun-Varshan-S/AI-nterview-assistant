@@ -106,6 +106,35 @@ const pickUniqueItems = (list = [], count = 1, offsetSeed = Date.now()) => {
   return selected;
 };
 
+const stripIdentityFields = (value) => {
+  if (Array.isArray(value)) return value.map(stripIdentityFields);
+  if (!value || typeof value !== 'object') return value;
+
+  const out = {};
+  Object.keys(value).forEach((key) => {
+    if (key === '_id' || key === 'id') return;
+    out[key] = stripIdentityFields(value[key]);
+  });
+  return out;
+};
+
+const toPersistableQuestion = (question = {}) => {
+  const normalized = stripIdentityFields({ ...question });
+  const originalId = question?.id || question?.questionId;
+  if (originalId) normalized.questionId = String(originalId);
+  delete normalized._id;
+  delete normalized.id;
+  return normalized;
+};
+
+const toApiQuestion = (question = {}) => {
+  const normalized = { ...question };
+  if (!normalized.id && normalized.questionId) {
+    normalized.id = normalized.questionId;
+  }
+  return normalized;
+};
+
 const buildAptitudeMCQs = ({ topic = 'Aptitude', difficulty = 'medium', questionCount = 5 }) => {
   const seed = Date.now();
   const selected = [
@@ -132,10 +161,6 @@ const buildAptitudeMCQs = ({ topic = 'Aptitude', difficulty = 'medium', question
 
 const buildPracticeQuestions = async ({ mode, topic, difficulty, questionCount }) => {
   try {
-    if (mode === 'aptitude') {
-      return buildAptitudeMCQs({ topic, difficulty, questionCount });
-    }
-
     // For coding mode, use the specialized topic-specific generator
     if (mode === 'coding') {
       const topicResult = await geminiService.generateTopicCodingQuestion({
@@ -211,6 +236,11 @@ const buildPracticeQuestions = async ({ mode, topic, difficulty, questionCount }
       interviewType: mode === 'coding' ? 'coding' : 'theoretical'
     });
 
+    if (mode !== 'coding' && generated?.source === 'fallback') {
+      const reason = generated?.fallbackReason || generated?.errorType || 'gemini_unavailable';
+      throw new Error(`GEMINI_REQUIRED_NON_CODING:${reason}`);
+    }
+
     const questions = Array.isArray(generated?.questions) ? generated.questions : [];
     const modeFiltered = mode === 'coding'
       ? questions.filter((q) => q.isCoding)
@@ -232,7 +262,14 @@ const buildPracticeQuestions = async ({ mode, topic, difficulty, questionCount }
       }));
     }
   } catch (error) {
+    if (mode !== 'coding' && String(error?.message || '').startsWith('GEMINI_REQUIRED_NON_CODING:')) {
+      throw error;
+    }
     logger.warn('Practice question generation fallback triggered', { mode, topic, error: error.message });
+  }
+
+  if (mode !== 'coding') {
+    throw new Error('GEMINI_REQUIRED_NON_CODING:gemini_unavailable');
   }
 
   const templates = FALLBACK_QUESTIONS[mode] || FALLBACK_QUESTIONS.technical;
@@ -261,7 +298,34 @@ exports.startPracticeSession = asyncHandler(async (req, res, next) => {
     return next(new AppError('Invalid practice mode', 400));
   }
 
-  // Create practice session
+  const historicalSessions = await PracticeSession.find({ userId: req.user.id, mode: 'coding' })
+    .select('questions.questionId')
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+
+  const previousQuestionIds = historicalSessions
+    .flatMap((s) => Array.isArray(s.questions) ? s.questions : [])
+    .map((q) => q?.questionId || q?.id)
+    .filter(Boolean);
+
+  let questions;
+  try {
+    questions = await buildPracticeQuestions({ mode, topic, difficulty, questionCount, previousQuestionIds });
+  } catch (error) {
+    if (mode !== 'coding' && String(error?.message || '').startsWith('GEMINI_REQUIRED_NON_CODING:')) {
+      const fallbackReason = String(error.message).split(':')[1] || 'gemini_unavailable';
+      const isRateLimit = fallbackReason === 'gemini_rate_limit';
+      return next(new AppError(
+        isRateLimit
+          ? `Gemini rate limit reached while generating ${mode} questions. Please retry shortly.`
+          : `Gemini is required for ${mode} question generation but is unavailable (${fallbackReason}).`,
+        isRateLimit ? 429 : 503
+      ));
+    }
+    throw error;
+  }
+
   const session = await PracticeSession.create({
     userId: req.user.id,
     mode,
@@ -269,13 +333,10 @@ exports.startPracticeSession = asyncHandler(async (req, res, next) => {
     difficulty,
     totalQuestions: questionCount,
     status: 'in-progress',
+    questions: questions.map(toPersistableQuestion),
   });
 
-  // Generate practice questions using existing Gemini flow with safe fallback
-  const questions = await buildPracticeQuestions({ mode, topic, difficulty, questionCount });
-
-  session.questions = questions;
-  await session.save();
+  const apiQuestions = (session.questions || []).map((q) => toApiQuestion(q.toObject ? q.toObject() : q));
 
   res.status(201).json({
     success: true,
@@ -285,7 +346,7 @@ exports.startPracticeSession = asyncHandler(async (req, res, next) => {
       topic: session.topic,
       difficulty: session.difficulty,
       totalQuestions: session.totalQuestions,
-      questions: questions,
+      questions: apiQuestions,
     },
   });
 });
@@ -382,8 +443,9 @@ exports.completePracticeSession = asyncHandler(async (req, res, next) => {
 
   for (const answer of session.answers) {
     const q = session.questions[answer.questionIndex] || {};
+    const isMcqQuestion = q.type === 'mcq' || (Array.isArray(q.options) && q.options.length > 0 && q.correctAnswer);
 
-    if (session.mode === 'aptitude' || q.type === 'mcq') {
+    if (isMcqQuestion) {
       const isCorrect = String(answer.response || '').trim().toLowerCase() === String(q.correctAnswer || '').trim().toLowerCase();
       const score = isCorrect ? 10 : 0;
       answer.score = score;
@@ -520,6 +582,7 @@ exports.getPracticeSessionDetails = asyncHandler(async (req, res, next) => {
   // Dynamically normalize questions to ensure redundant field mapping
   if (Array.isArray(sessionObj.questions)) {
     sessionObj.questions = sessionObj.questions.map(q => {
+      const withId = toApiQuestion(q);
       if (q.isCoding || q.type === 'coding') {
         const testCases = (Array.isArray(q.testCases) ? q.testCases : (Array.isArray(q.test_cases) ? q.test_cases : [])).map(tc => {
           const expected = tc.expected ?? tc.output ?? tc.expected_output ?? tc.expectedOutput ?? '';
@@ -542,9 +605,9 @@ exports.getPracticeSessionDetails = asyncHandler(async (req, res, next) => {
           };
         });
 
-        return { ...q, testCases, examples };
+        return { ...withId, testCases, examples };
       }
-      return q;
+      return withId;
     });
   }
 

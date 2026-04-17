@@ -1,11 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { interviewAPI, Interview, SessionMetrics } from '../services/api';
 import { toast } from 'sonner';
 import Spinner from '../components/Spinner';
 import CountdownTimer from '../components/CountdownTimer';
 import DifficultyBadge from '../components/DifficultyBadge';
-import CodingQuestionComponent from '../components/CodingQuestionComponent';
 import { interviewStateStorage } from '../utils/interviewStateStorage';
 import { Send, CheckCircle, AlertCircle, Terminal, Zap, Target } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
@@ -13,8 +12,40 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { LeetCodeEditor } from '@/components/code-editor';
+import type { CodingProblem, ExecutionResult } from '@/components/code-editor/types';
 
 const QUESTION_TIME_LIMIT = 180;
+const DIFFICULTY_TIME_LIMITS: Record<string, number> = {
+  easy: 60,
+  medium: 120,
+  hard: 180
+};
+
+const JUDGE0_TO_APP_LANGUAGE: Record<number, string> = {
+  71: 'python',
+  63: 'javascript',
+  62: 'java',
+  54: 'cpp',
+  50: 'c',
+  74: 'typescript'
+};
+
+const getInterviewCodingStorageKey = (interviewId: string, questionIndex: number) =>
+  `interview_code_${interviewId}_${questionIndex}`;
+
+const getStoredCodingDraft = (storageKey: string) => {
+  try {
+    const saved = localStorage.getItem(storageKey);
+    if (!saved) return { code: '', language: 'javascript' };
+    const parsed = JSON.parse(saved);
+    const code = typeof parsed?.code === 'string' ? parsed.code : '';
+    const language = JUDGE0_TO_APP_LANGUAGE[Number(parsed?.languageId)] || 'javascript';
+    return { code, language };
+  } catch {
+    return { code: '', language: 'javascript' };
+  }
+};
 
 export default function InterviewSession() {
   const { id } = useParams<{ id: string }>();
@@ -34,7 +65,6 @@ export default function InterviewSession() {
   const [questionStartTime, setQuestionStartTime] = useState<number>(Date.now());
   const [firstTypingTime, setFirstTypingTime] = useState<number | null>(null);
   const [nonCodingEditCount, setNonCodingEditCount] = useState(0);
-  const [codingMetrics, setCodingMetrics] = useState({ editCount: 0, typingDurationMs: 0 });
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -46,7 +76,6 @@ export default function InterviewSession() {
     setQuestionStartTime(Date.now());
     setFirstTypingTime(null);
     setNonCodingEditCount(0);
-    setCodingMetrics({ editCount: 0, typingDurationMs: 0 });
   }, [currentQuestionIndex]);
 
   useEffect(() => {
@@ -133,11 +162,11 @@ export default function InterviewSession() {
           interactionMetrics: {
             timeSpentSec: Math.max(0, Math.round((Date.now() - questionStartTime) / 1000)),
             typingDurationMs: responsePayload.isCodingAnswer
-              ? codingMetrics.typingDurationMs
+              ? 0
               : firstTypingTime
                 ? Date.now() - firstTypingTime
                 : 0,
-            editCount: responsePayload.isCodingAnswer ? codingMetrics.editCount : nonCodingEditCount,
+            editCount: responsePayload.isCodingAnswer ? 0 : nonCodingEditCount,
             autoSubmitted: autoSubmit,
           },
         }
@@ -185,36 +214,23 @@ export default function InterviewSession() {
   const handleTimeout = () => {
     if (interview?.status === 'in-progress' && !submitting) {
       const isCoding = isCodingQuestion(interview.questions[currentQuestionIndex]);
+      const draftKey = id ? getInterviewCodingStorageKey(id, currentQuestionIndex) : '';
+      const storedDraft = isCoding && draftKey ? getStoredCodingDraft(draftKey) : null;
       handleSubmitAnswer(
         {
-          response: isCoding ? codingAnswer : answer,
+          response: isCoding ? (storedDraft?.code || codingAnswer) : answer,
           isCodingAnswer: isCoding,
-          language: isCoding ? codingLanguage : undefined,
+          language: isCoding ? (storedDraft?.language || codingLanguage) : undefined,
         },
         true
       );
     }
   };
 
-  if (loading) {
-    return (
-      <div className="flex min-h-[60vh] items-center justify-center">
-        <Spinner size="lg" />
-      </div>
-    );
-  }
+  const currentQuestion = interview?.questions?.[currentQuestionIndex];
 
-  if (!interview) return null;
-
-  const currentQuestion = interview.questions[currentQuestionIndex];
-  const isCoding = isCodingQuestion(currentQuestion);
-  const progress = (currentQuestionIndex / interview.questions.length) * 100;
-  const questionTimeLimit = currentQuestion.timeLimit ?? QUESTION_TIME_LIMIT;
-  const targetingWeakSkill =
-    Boolean(currentQuestion.targetingWeakSkill) ||
-    (Boolean(targetWeakTopic) && currentQuestion.topic === targetWeakTopic);
-
-  function isCodingQuestion(question: Interview['questions'][0]) {
+  function isCodingQuestion(question?: Interview['questions'][0]) {
+    if (!question) return false;
     const questionAny = question as { isCoding?: boolean; type?: string; topic?: string; domain?: string; question?: string };
     if (questionAny?.isCoding) return true;
     if (questionAny?.type === 'coding') return true;
@@ -226,23 +242,102 @@ export default function InterviewSession() {
     return codingKeywords.some((keyword) => text.includes(keyword));
   }
 
-  const remainingQuestions = interview.questions.length - currentQuestionIndex - 1;
+  const isCoding = isCodingQuestion(currentQuestion);
+  const progress = interview ? (currentQuestionIndex / interview.questions.length) * 100 : 0;
+  const questionTimeLimit = Math.max(
+    15,
+    Number(
+      currentQuestion?.timeLimit ||
+      DIFFICULTY_TIME_LIMITS[String(currentQuestion?.difficulty || '').toLowerCase()] ||
+      QUESTION_TIME_LIMIT
+    )
+  );
+  const targetingWeakSkill =
+    Boolean(currentQuestion?.targetingWeakSkill) ||
+    (Boolean(targetWeakTopic) && currentQuestion?.topic === targetWeakTopic);
 
-  const runCode = async ({ code, language, questionIndex }: { code: string; language: string; questionIndex: number }) => {
-    try {
-      const result = await interviewAPI.runCode(id!, { code, language, questionIndex });
-      if (result.error) {
-        toast.error(result.error);
-      } else if (result.passed) {
-        toast.success('All visible test cases passed');
-      } else {
-        toast.warning('Some test cases failed');
-      }
-      return result;
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Code execution failed');
-      return null;
+  const remainingQuestions = interview ? (interview.questions.length - currentQuestionIndex - 1) : 0;
+
+  const codingProblem = useMemo((): CodingProblem | null => {
+    if (!isCoding || !currentQuestion || !id) return null;
+
+    const questionAny = currentQuestion as any;
+    const allTestCases = Array.isArray(questionAny.testCases)
+      ? questionAny.testCases.map((tc: any) => ({
+          input: tc.input ?? '',
+          expected: tc.expected ?? tc.expectedOutput ?? tc.expected_output ?? tc.output ?? '',
+          isHidden: tc.isHidden ?? false,
+          description: tc.description ?? ''
+        }))
+      : [];
+
+    const visibleTestCases = allTestCases.filter((tc: any) => !tc.isHidden);
+
+    let examples = [];
+    if (Array.isArray(questionAny.examples) && questionAny.examples.length > 0) {
+      examples = questionAny.examples.map((ex: any) => ({
+        input: ex.input ?? '',
+        output: ex.output ?? ex.expected ?? ex.expected_output ?? ex.expectedOutput ?? '',
+        explanation: ex.explanation ?? ''
+      }));
+    } else if (visibleTestCases.length > 0) {
+      examples = visibleTestCases.slice(0, 2).map((tc: any) => ({
+        input: tc.input,
+        output: tc.expected,
+        explanation: tc.description || ''
+      }));
+    } else if (allTestCases.length > 0) {
+      examples = allTestCases.slice(0, 2).map((tc: any) => ({
+        input: tc.input,
+        output: tc.expected,
+        explanation: tc.description || ''
+      }));
     }
+
+    return {
+      id: `interview_${id}_${currentQuestionIndex}`,
+      title: questionAny.title || `Problem ${currentQuestionIndex + 1}`,
+      description: currentQuestion.question || '',
+      difficulty: (questionAny.difficulty || 'medium') as 'easy' | 'medium' | 'hard',
+      inputFormat: questionAny.inputFormat || '',
+      outputFormat: questionAny.outputFormat || '',
+      constraints: Array.isArray(questionAny.constraints) ? questionAny.constraints : [],
+      examples,
+      testCases: visibleTestCases,
+      hiddenTestCases: allTestCases
+        .filter((tc: any) => tc.isHidden)
+        .map((tc: any) => ({
+          input: tc.input ?? '',
+          expected: tc.expected ?? '',
+          isHidden: true,
+          description: tc.description ?? ''
+        })),
+      topic: questionAny.topic || 'Coding',
+      tags: questionAny.tags || [questionAny.topic || 'Coding'],
+      timeLimit: Number(questionAny.timeLimit || 180)
+    };
+  }, [currentQuestion, currentQuestionIndex, id, isCoding]);
+
+  if (loading) {
+    return (
+      <div className="flex min-h-[60vh] items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+
+  if (!interview) return null;
+  if (!currentQuestion) return null;
+
+  const handleCodingSubmit = async (_result: ExecutionResult, code: string, languageId: number) => {
+    const mappedLanguage = JUDGE0_TO_APP_LANGUAGE[languageId] || 'javascript';
+    setCodingAnswer(code);
+    setCodingLanguage(mappedLanguage);
+
+    await handleSubmitAnswer(
+      { response: code, isCodingAnswer: true, language: mappedLanguage },
+      false
+    );
   };
 
   return (
@@ -331,34 +426,18 @@ export default function InterviewSession() {
           <CardContent className="p-8">
             <div className="min-h-[300px]">
               {isCoding ? (
-                <CodingQuestionComponent
-                  question={currentQuestion.question}
-                  questionIndex={currentQuestionIndex}
-                  questionData={{
-                    inputFormat: (currentQuestion as any).inputFormat,
-                    outputFormat: (currentQuestion as any).outputFormat,
-                    constraints: (currentQuestion as any).constraints,
-                    examples: (currentQuestion as any).examples,
-                    template: (currentQuestion as any).template,
-                  }}
-                  storageKeyPrefix={`coding_answer_${id}`}
-                  isSubmitting={submitting}
-                  difficultyShift={difficultyChange}
-                  onRun={runCode}
-                  onCodeChange={(code: string, language: string) => {
-                    setCodingAnswer(code);
-                    setCodingLanguage(language);
-                  }}
-                  onMetricsChange={({ editCount, typingDurationMs }) => {
-                    setCodingMetrics({ editCount, typingDurationMs });
-                  }}
-                  onSubmit={({ code, language }: { code: string; language: string }) =>
-                    handleSubmitAnswer(
-                      { response: code, isCodingAnswer: true, language },
-                      false
-                    )
-                  }
-                />
+                codingProblem ? (
+                  <div className="rounded-2xl overflow-hidden border border-zinc-200 dark:border-zinc-800">
+                    <LeetCodeEditor
+                      problem={codingProblem}
+                      onSubmit={handleCodingSubmit}
+                      storageKey={getInterviewCodingStorageKey(id!, currentQuestionIndex)}
+                      showProblemPanel={true}
+                      autoSave={true}
+                      className="h-[700px]"
+                    />
+                  </div>
+                ) : null
               ) : (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">
@@ -428,6 +507,7 @@ export default function InterviewSession() {
         </Card>
       </div>
 
+      {!isCoding && (
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 lg:gap-6">
         <Card className="border-zinc-200 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/30">
           <CardHeader className="pb-3">
@@ -465,6 +545,7 @@ export default function InterviewSession() {
           </CardContent>
         </Card>
       </div>
+      )}
     </div>
   );
 }

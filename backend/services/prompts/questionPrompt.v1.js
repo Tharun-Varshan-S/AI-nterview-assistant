@@ -1,4 +1,4 @@
-const version = 'question.v2';
+const version = 'question.v3';
 
 const buildQuestionPrompt = ({ structuredData, rawText, focusTopics = [], interviewType = 'theoretical', questionCount = 6 }) => {
   let domainContext = '';
@@ -28,6 +28,9 @@ STRICT OUTPUT RULES:
 3. Do NOT include code fences.
 4. Response must be directly parsable by JSON.parse().
 5. Use only double-quoted strings.
+6. Do not include any text before or after the JSON object.
+7. Do not use newlines inside string values.
+8. The response must start with { and end with }.
 
 JSON STRUCTURE:
 {
@@ -72,6 +75,11 @@ REQUIREMENTS:
   - testCases must be [].
 - Match candidate skills: ${structuredData?.skills?.join(', ') || 'General'}
 - ${focusTopicsText}
+
+OUTPUT SHAPE NOTES:
+- Keep the JSON compact and avoid pretty-printed code blocks.
+- Do not wrap the response in triple backticks.
+- Do not include explanatory text such as "Here is the JSON".
 
 If you cannot satisfy these constraints reliably, return exactly: {"fallback": true, "questions": []}
 
