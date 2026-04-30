@@ -18,7 +18,6 @@ const {
 
 const GEMINI_API_ENDPOINT = 'https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash:generateContent';
 const DELAY_MS = 1500;
-const RETRY_BACKOFF = [1500, 3000];
 const USE_MOCK = process.env.USE_MOCK === 'true' || false;
 let GEMINI_DISABLED_FOR_RUNTIME = false;
 let GEMINI_DISABLE_NOTICE_LOGGED = false;
@@ -246,7 +245,24 @@ const extractJsonObject = (text) => {
   return null;
 };
 
-const callGemini = async (prompt, attempt = 0) => {
+const withRetry = async (apiCall, retries = 4) => {
+  const delays = [2000, 5000, 10000, 20000];
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await apiCall();
+    } catch (error) {
+      if (error.response && error.response.status === 503 && attempt < retries) {
+        const delay = delays[attempt];
+        logger.warn(`⚠️ Gemini 503 - Retry ${attempt + 1}/${retries} in ${delay}ms`);
+        await sleep(delay);
+        continue;
+      }
+      throw error;
+    }
+  }
+};
+
+const callGemini = async (prompt) => {
   if (USE_MOCK) {
     throw new Error('Mock mode enabled');
   }
@@ -281,12 +297,14 @@ const callGemini = async (prompt, attempt = 0) => {
     const apiKey = encodeURIComponent(process.env.GEMINI_API_KEY);
     const endpointWithKey = `${GEMINI_API_ENDPOINT}?key=${apiKey}`;
 
-    const response = await axios.post(
-      endpointWithKey,
-      requestBody,
-      {
-        timeout: 30000
-      }
+    const response = await withRetry(() => 
+      axios.post(
+        endpointWithKey,
+        requestBody,
+        {
+          timeout: 30000
+        }
+      )
     );
 
     const text = response.data?.candidates?.[0]?.content?.parts?.[0]?.text;
@@ -307,7 +325,6 @@ const callGemini = async (prompt, attempt = 0) => {
     return parsed;
   } catch (error) {
     const status = error.response?.status || (error.isParseError ? 'PARSE' : undefined);
-    const isRetryable = status >= 500 || status === 'PARSE' || !status;
 
     if (isPermissionDeniedError(error)) {
       GEMINI_DISABLED_FOR_RUNTIME = true;
@@ -321,13 +338,6 @@ const callGemini = async (prompt, attempt = 0) => {
       status,
       data: error.response?.data || error.response?.statusText || 'No response data'
     });
-
-    if (isRetryable && attempt < RETRY_BACKOFF.length) {
-      const waitTime = RETRY_BACKOFF[attempt];
-      logger.warn(`Retrying Gemini call in ${waitTime}ms... (Attempt ${attempt + 1})`);
-      await sleep(waitTime);
-      return callGemini(prompt, attempt + 1);
-    }
 
     throw error;
   }

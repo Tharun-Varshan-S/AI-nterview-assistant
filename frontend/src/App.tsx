@@ -15,6 +15,7 @@ import PracticeSessionPage from './pages/PracticeSessionPage';
 import PracticeResultsDetail from './components/PracticeResultsDetail';
 import MockSetupPage from './pages/MockSetupPage';
 import AnalyticsPage from './pages/AnalyticsPage';
+import AIInterviewPage from './pages/AIInterviewPage';
 
 function LegacyInterviewRedirect({ targetPrefix }: { targetPrefix: string }) {
   const { id } = useParams<{ id: string }>();
@@ -30,6 +31,7 @@ function App() {
         <BrowserRouter>
           <Routes>
             {/* Public Routes */}
+            <Route path="/ai-interview" element={<AIInterviewPage />} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/register" element={<RegisterPage />} />
 
@@ -74,8 +76,8 @@ function App() {
             <Route path="/mock/:id" element={<LegacyInterviewRedirect targetPrefix="/candidate/interview" />} />
             <Route path="/analytics" element={<Navigate to="/candidate/analytics" replace />} />
             <Route path="/interview/:id/results" element={<LegacyInterviewRedirect targetPrefix="/candidate/results" />} />
-            <Route path="/" element={<Navigate to="/login" replace />} />
-            <Route path="*" element={<Navigate to="/login" replace />} />
+            <Route path="/" element={<Navigate to="/ai-interview" replace />} />
+            <Route path="*" element={<Navigate to="/ai-interview" replace />} />
           </Routes>
 
           <Toaster position="top-right" richColors expand={false} />
