@@ -38,7 +38,7 @@ const CTASection = () => {
             onClick={handleStartInterview}
             className="px-8 py-4 rounded-xl bg-primary text-primary-foreground font-semibold text-base glow-primary hover:scale-105 transition-transform"
           >
-            Start Your AI Interview
+            Start NeuroPrep AI
           </button>
           <button className="px-8 py-4 rounded-xl glass-card text-foreground font-semibold text-base hover:bg-secondary/50 transition-colors">
             Upload Resume

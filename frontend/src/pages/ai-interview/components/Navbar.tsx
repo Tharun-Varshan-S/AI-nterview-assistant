@@ -22,7 +22,7 @@ const Navbar = () => {
             <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
         </div>
-        <span className="text-foreground font-semibold text-lg tracking-tight">AI Interview</span>
+        <span className="text-foreground font-semibold text-lg tracking-tight">NeuroPrep AI</span>
       </div>
       
       <div className="flex items-center gap-4 sm:gap-6">

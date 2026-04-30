@@ -40,7 +40,7 @@ export default function AppLayout() {
       <header className="border-b sticky top-0 bg-background/80 backdrop-blur z-10">
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-4">
-            <h1 className="font-semibold">AI Interview Assistant</h1>
+            <h1 className="font-semibold">NeuroPrep AI</h1>
             {user && (
               <span className="text-sm text-gray-600 dark:text-gray-400">
                 {user.name} ({user.role})

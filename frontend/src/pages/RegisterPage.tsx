@@ -29,7 +29,7 @@ export default function RegisterPage() {
     try {
       const data = await authAPI.register(name, email, password, role);
       login(data.user, data.token);
-      toast.success('Archive created. Welcome to Novus.');
+      toast.success('Archive created. Welcome to NeuroPrep AI.');
 
       // Navigate based on role
       if (data.user.role === 'recruiter') {
@@ -62,7 +62,7 @@ export default function RegisterPage() {
           <h1 className="text-4xl font-heading font-bold text-zinc-900 dark:text-zinc-50 tracking-tight mb-2 text-center">
             New <span className="text-zinc-400 font-medium">Clearance</span>
           </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Establish your profile within the Novus archive.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Establish your profile within the NeuroPrep AI archive.</p>
         </div>
 
         <Card className="border-zinc-200 dark:border-zinc-800 shadow-2xl bg-white dark:bg-zinc-900/50 backdrop-blur-xl rounded-3xl overflow-hidden">

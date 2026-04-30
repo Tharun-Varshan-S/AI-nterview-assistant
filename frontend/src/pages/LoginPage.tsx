@@ -56,7 +56,7 @@ export default function LoginPage() {
             </svg>
           </div>
           <h1 className="text-4xl font-heading font-bold text-zinc-900 dark:text-zinc-50 tracking-tight mb-2 text-center">
-            Novus <span className="text-zinc-400 font-medium">Protocol</span>
+            NeuroPrep <span className="text-zinc-400 font-medium">AI</span>
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 font-medium">Sign in to initialize your secure evaluation session.</p>
         </div>

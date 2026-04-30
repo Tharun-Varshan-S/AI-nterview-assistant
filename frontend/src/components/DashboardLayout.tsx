@@ -90,7 +90,7 @@ export default function DashboardLayout() {
                 </div>
                 <div className="flex flex-col">
                   <h1 className="font-heading text-sm leading-none font-black tracking-tight text-zinc-900 dark:text-zinc-100">
-                    NOVUS
+                    NEUROPREP AI
                   </h1>
                   <span className="-mt-0.5 text-[9px] font-bold uppercase tracking-[.3em] text-zinc-400">
                     PROTOCOL
@@ -314,7 +314,7 @@ export default function DashboardLayout() {
                 <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-zinc-950 dark:bg-white">
                   <Cpu size={18} className="text-white dark:text-zinc-950" />
                 </div>
-                <h2 className="font-heading text-lg font-black tracking-tighter">NOVUS</h2>
+                <h2 className="font-heading text-lg font-black tracking-tighter">NEUROPREP AI</h2>
               </div>
               <Button
                 variant="ghost"
