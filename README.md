@@ -99,9 +99,9 @@ npm run dev
 ### Backend (.env)
 ```env
 PORT=5000
-MONGODB_URI=mongodb+srv://tharunvarshans087_db_user:PiRxc1JWrTZGQ0rb@cluster0.bbhs0kz.mongodb.net/interview-assistant?retryWrites=true&w=majority
+MONGODB_URI=your_url
 JWT_SECRET=your_jwt_secret_key_change_this_in_production
-GEMINI_API_KEY=AIzaSyB8LiszMBcZiLkHuwV_sYeLwI85Ha41E0Y
+GEMINI_API_KEY=your_gemini_api_key
 NODE_ENV=development
 ```
 
